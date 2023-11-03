@@ -1,0 +1,70 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: backstage-deps-analysis
+spec:
+  entrypoint: analysis
+  podGC:
+    strategy: OnPodCompletion
+  arguments:
+    parameters:
+    - name: repo
+      value: https://github.com/kwangil77/backstage.git
+    - name: revision
+      value: main
+  templates:
+  - name: analysis
+    steps:
+    - - name: execute
+        template: execute
+  - name: execute
+    inputs:
+      artifacts:
+      - name: source
+        path: /src
+        git:
+          repo: "{{ workflow.parameters.repo }}"
+          revision: "{{ workflow.parameters.revision }}"
+          usernameSecret:
+            name: bitbucket-secret
+            key: username
+          passwordSecret:
+            name: bitbucket-secret
+            key: password
+    serviceAccountName: argo-workflow
+    container:
+      image: ghcr.io/cyclonedx/cdxgen:v8.5.3
+      env:
+      - name: FETCH_LICENSE
+        value: 'true'
+      - name: DTRACK_URL
+        valueFrom:
+          secretKeyRef:
+            name: dependency-track-secret
+            key: url
+      - name: DTRACK_API_KEY
+        valueFrom:
+          secretKeyRef:
+            name: dependency-track-secret
+            key: api.key
+      command:
+      - "/bin/bash"
+      - "-c"
+      args:
+      - "
+        /usr/bin/node /opt/cdxgen/bin/cdxgen -r /src
+          --server-url ${DTRACK_URL}
+          --api-key ${DTRACK_API_KEY}
+          --project-name {{ workflow.parameters.repo }}
+          --project-version {{ workflow.parameters.revision }}
+        "
+      workingDir: /src
+      resources:
+        requests:
+          memory: 2048Mi
+          cpu: 2000m
+    nodeSelector:
+      kubernetes.io/arch: amd64
+      team: devops
+      service: devops-infra
+      performance_type: standard

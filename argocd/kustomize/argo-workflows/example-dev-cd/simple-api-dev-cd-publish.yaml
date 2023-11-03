@@ -1,0 +1,136 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: simple-api-dev-cd-publish
+spec:
+  entrypoint: publish
+  podGC:
+    strategy: OnPodCompletion
+  arguments:
+    parameters:
+    - name: repo
+      value: https://github.com/kwangil77/deployment.git
+    - name: revision
+      value: main
+  templates:
+  - name: publish
+    steps:
+    - - name: register-application-revision
+        template: register-application-revision
+    - - name: create-deployment
+        template: create-deployment
+        arguments:
+          parameters:
+          - name: version
+            value: "{{ steps.register-application-revision.outputs.parameters.version }}"
+  - name: register-application-revision
+    inputs:
+      artifacts:
+      - name: source
+        path: /src
+        git:
+          repo: "{{ workflow.parameters.repo }}"
+          revision: "{{ workflow.parameters.revision }}"
+          usernameSecret:
+            name: bitbucket-secret
+            key: username
+          passwordSecret:
+            name: bitbucket-secret
+            key: password
+      parameters:
+      - name: version
+        value: "{{ workflow.creationTimestamp.Y }}{{ workflow.creationTimestamp.m }}{{ workflow.creationTimestamp.d }}{{ workflow.creationTimestamp.H }}{{ workflow.creationTimestamp.M }}"
+    outputs:
+      parameters:
+      - name: version
+        valueFrom:
+          path: /tmp/version
+    volumes:
+    - name: aws-config
+      configMap:
+        name: aws-config
+        items:
+        - key: config
+          path: config
+    serviceAccountName: argo-workflow
+    container:
+      image: public.ecr.aws/sam/build-provided.al2
+      env:
+      - name: AWS_PROFILE
+        value: example-dev
+      - name: AWS_DEFAULT_REGION
+        value: ap-northeast-2
+      command:
+      - "/bin/sh"
+      - "-c"
+      args:
+      - "
+        cd argo-workflows/codedeploy/simple-api/simple-api-dev
+        && zip simple-api-dev.zip -r .
+        && aws s3 cp simple-api-dev.zip s3://example-dev-devops-bucket/application/simple-api/{{ workflow.parameters.revision }}/simple-api-dev-{{ inputs.parameters.version }}.zip
+        && aws deploy register-application-revision
+          --application-name simple-api
+          --s3-location bucket=example-dev-devops-bucket,key=application/simple-api/{{ workflow.parameters.revision }}/simple-api-dev-{{ inputs.parameters.version }}.zip,bundleType=zip
+        && echo '{{ inputs.parameters.version }}' > /tmp/version
+        "
+      workingDir: /src
+      resources:
+        requests:
+          memory: 128Mi
+          cpu: 50m
+      volumeMounts:
+      - name: aws-config
+        mountPath: /root/.aws/config
+        subPath: config
+    nodeSelector:
+      kubernetes.io/arch: amd64
+      team: devops
+      service: devops-infra
+      performance_type: standard
+  - name: create-deployment
+    inputs:
+      parameters:
+      - name: version
+    volumes:
+    - name: aws-config
+      configMap:
+        name: aws-config
+        items:
+        - key: config
+          path: config
+    serviceAccountName: argo-workflow
+    container:
+      image: harbor.example.io/devops/aws-handler
+      env:
+      - name: AWS_PROFILE
+        value: example-dev
+      - name: AWS_DEFAULT_REGION
+        value: ap-northeast-2
+      command:
+      - "/bin/sh"
+      - "-c"
+      args:
+      - "
+        python3 -u /codedeploy/create_deployment.py
+          --application-name simple-api
+          --group-name simple-api-dev
+          --config-name CodeDeployDefault.OneAtATime
+          --s3-bucket example-dev-devops-bucket
+          --s3-key application/simple-api/{{ workflow.parameters.revision }}/simple-api-dev-{{ inputs.parameters.version }}.zip
+          --bundle-type zip
+        "
+      activeDeadlineSeconds: 300
+      workingDir: /
+      resources:
+        requests:
+          memory: 128Mi
+          cpu: 50m
+      volumeMounts:
+      - name: aws-config
+        mountPath: /root/.aws/config
+        subPath: config
+    nodeSelector:
+      kubernetes.io/arch: amd64
+      team: devops
+      service: devops-infra
+      performance_type: standard

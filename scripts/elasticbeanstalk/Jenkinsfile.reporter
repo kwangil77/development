@@ -1,0 +1,120 @@
+library identifier: 'example-pipeline-library', changelog: false
+
+def timestamp = new Date().format("yyyy-MM-dd'T'HH:mm:ss.SSSZ")
+def version = timestamp.substring(0, 10).replace('-', '')
+
+def bitbucketUrl = 'https://bitbucket.example.io'
+def elasticsearchUrl = 'https://....ap-northeast-2.es.amazonaws.com'
+def indexPrefix = 'awseb_envs'
+def intervalSec = 10
+def awsProfiles = [
+    'example-dev'
+]
+publishBasePipeline slackChannels: ['#devops_alert'], containers: [], {
+    currentBuild.displayName = "#${version}"
+
+    stage('Checkout') {
+        deleteDir()
+        checkout scm
+    }
+    stage('Prepare reports') {
+        httpRequest httpMode: 'DELETE', validResponseCodes: '100:599', url: "${elasticsearchUrl}/${indexPrefix}-${version}"
+
+        withAWS([region: 'ap-northeast-2']) {
+            awsProfiles.each { profile ->
+                output = sh returnStdout: true, script: """
+                    export AWS_PROFILE=${profile} && \
+                    aws elasticbeanstalk describe-applications \
+                        --query "{Applications:Applications[?Description&&contains(Description,'${bitbucketUrl}')]}"
+                """
+                response = readJSON text: output
+                scms = response.Applications.groupBy({ application -> application.ApplicationName })
+
+                output = sh returnStdout: true, script: """
+                    export AWS_PROFILE=${profile} && \
+                    aws elasticbeanstalk list-platform-versions
+                """
+                response = readJSON text: output
+                states = response.PlatformSummaryList.groupBy({ platform -> platform.PlatformArn })
+
+                output = sh returnStdout: true, script: """
+                    export AWS_PROFILE=${profile} && \
+                    aws elasticbeanstalk describe-environments \
+                        --query "{Environments:Environments[?CNAME&&EndpointURL]}"
+                """
+                response = readJSON text: output
+                environments = []
+
+                response.Environments.each { environment ->
+                    options = [OptionSettings: []]
+
+                    try {
+                        output = sh returnStdout: true, script: """
+                            export AWS_PROFILE=${profile} && \
+                            aws elasticbeanstalk describe-configuration-settings \
+                                --application-name ${environment.ApplicationName} \
+                                --environment-name ${environment.EnvironmentName} \
+                                --query "{OptionSettings:ConfigurationSettings[0].OptionSettings}"
+                        """
+                        options = readJSON text: output
+                    } catch (e) {}
+
+                    resource = [ResourceTags: []]
+
+                    try {
+                        output = sh returnStdout: true, script: """
+                            export AWS_PROFILE=${profile} && \
+                            aws elasticbeanstalk list-tags-for-resource \
+                                --resource-arn ${environment.EnvironmentArn}
+                        """
+                        resource = readJSON text: output
+                    } catch (e) {}
+
+                    environments << ([
+                        '@timestamp': timestamp,
+                        Account: profile
+                    ] << [
+                        Tags: resource.ResourceTags.collectEntries { [it.Key, it.Value] }
+                    ] << environment << [
+                        OptionSettings: options.OptionSettings.groupBy({ option -> option.Namespace }).collectEntries{ k, v -> [(k): v.collectEntries { [it.OptionName, it.Value] }] }
+                    ])
+                }
+                if (environments) {
+                    environments.findAll {
+                        it.OptionSettings['aws:elasticbeanstalk:application:environment'] != null
+                    }.each {
+                        it.OptionSettings << [
+                            'aws:elasticbeanstalk:application:environment': groovy.json.JsonOutput.toJson(it.OptionSettings['aws:elasticbeanstalk:application:environment'])
+                        ]
+                    }
+                    environments.findAll {
+                        scms[it.ApplicationName] != null
+                    }.each {
+                        it << [
+                            SCM: scms[it.ApplicationName].Description.first().replace('"', '')
+                        ]
+                    }
+                    environments.findAll {
+                        states[it.PlatformArn] != null
+                    }.each {
+                        it << [
+                            PlatformStatus: states[it.PlatformArn].PlatformBranchLifecycleState.first()
+                        ]
+                    }
+                    writeFile file: "${indexPrefix}-${profile}-${version}.json", text: environments.collect { '{"index":{}}\n' + groovy.json.JsonOutput.toJson(it) + '\n' }.join('')
+
+                    archiveArtifacts artifacts: "${indexPrefix}-${profile}-${version}.json", onlyIfSuccessful: true
+                 }
+            }
+        }
+    }
+    stage('Publish reports') {
+        awsProfiles.findAll { profile ->
+            fileExists("${indexPrefix}-${profile}-${version}.json")
+        }.each { profile ->
+            sleep intervalSec
+            data = readFile "${indexPrefix}-${profile}-${version}.json"
+            httpRequest acceptType: 'APPLICATION_JSON', contentType: 'APPLICATION_JSON', httpMode: 'POST', requestBody: data, url: "${elasticsearchUrl}/${indexPrefix}-${version}/_bulk"
+        }
+    }
+}

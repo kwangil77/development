@@ -1,0 +1,224 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Sensor
+metadata:
+  name: simple
+spec:
+  template:
+    serviceAccountName: argo-workflow
+    nodeSelector:
+      kubernetes.io/arch: amd64
+      team: devops
+      service: devops-infra
+      performance_type: standard
+  dependencies:
+  - name: simple
+    eventSourceName: argo-events
+    eventName: bitbucket-server
+    filters:
+      dataLogicalOperator: and
+      data:
+      - path: body.repository.links.clone.#(name=="http").href
+        type: string
+        value:
+        - https://github.com/kwangil77/simple.git
+      - path: body.changes.0.ref.displayId
+        type: string
+        value:
+        - main
+  triggers:
+  - template:
+      name: simple-api-publish
+      argoWorkflow:
+        operation: submit
+        source:
+          resource:
+            apiVersion: argoproj.io/v1alpha1
+            kind: Workflow
+            metadata:
+              generateName: simple-api-publish-
+              namespace: development
+              labels:
+                workflows.argoproj.io/workflow-template: simple-api-publish
+                submit-from-ui: 'true'
+            spec:
+              arguments:
+                parameters:
+                - name: repo
+                  value: https://github.com/kwangil77/simple.git
+                - name: revision
+                  value: main
+              workflowTemplateRef:
+                name: simple-api-publish
+        parameters:
+        - src:
+            dependencyName: simple
+            dataKey: body.changes.0.ref.displayId
+          dest: spec.arguments.parameters.1.value
+  - template:
+      name: simple-batch-publish
+      argoWorkflow:
+        operation: submit
+        source:
+          resource:
+            apiVersion: argoproj.io/v1alpha1
+            kind: Workflow
+            metadata:
+              generateName: simple-batch-publish-
+              namespace: development
+              labels:
+                workflows.argoproj.io/workflow-template: simple-batch-publish
+                submit-from-ui: 'true'
+            spec:
+              arguments:
+                parameters:
+                - name: repo
+                  value: https://github.com/kwangil77/simple.git
+                - name: revision
+                  value: main
+              workflowTemplateRef:
+                name: simple-batch-publish
+        parameters:
+        - src:
+            dependencyName: simple
+            dataKey: body.changes.0.ref.displayId
+          dest: spec.arguments.parameters.1.value
+  - template:
+      name: simple-client-publish
+      argoWorkflow:
+        operation: submit
+        source:
+          resource:
+            apiVersion: argoproj.io/v1alpha1
+            kind: Workflow
+            metadata:
+              generateName: simple-client-publish-
+              namespace: development
+              labels:
+                workflows.argoproj.io/workflow-template: simple-client-publish
+                submit-from-ui: 'true'
+            spec:
+              arguments:
+                parameters:
+                - name: repo
+                  value: https://github.com/kwangil77/simple.git
+                - name: revision
+                  value: main
+              workflowTemplateRef:
+                name: simple-client-publish
+        parameters:
+        - src:
+            dependencyName: simple
+            dataKey: body.changes.0.ref.displayId
+          dest: spec.arguments.parameters.1.value
+  - template:
+      name: simple-server-publish
+      argoWorkflow:
+        operation: submit
+        source:
+          resource:
+            apiVersion: argoproj.io/v1alpha1
+            kind: Workflow
+            metadata:
+              generateName: simple-server-publish-
+              namespace: development
+              labels:
+                workflows.argoproj.io/workflow-template: simple-server-publish
+                submit-from-ui: 'true'
+            spec:
+              arguments:
+                parameters:
+                - name: repo
+                  value: https://github.com/kwangil77/simple.git
+                - name: revision
+                  value: main
+              workflowTemplateRef:
+                name: simple-server-publish
+        parameters:
+        - src:
+            dependencyName: simple
+            dataKey: body.changes.0.ref.displayId
+          dest: spec.arguments.parameters.1.value
+  - template:
+      name: simple-code-analysis
+      argoWorkflow:
+        operation: submit
+        source:
+          resource:
+            apiVersion: argoproj.io/v1alpha1
+            kind: Workflow
+            metadata:
+              generateName: simple-code-analysis-
+              namespace: development
+              labels:
+                workflows.argoproj.io/workflow-template: simple-code-analysis
+                submit-from-ui: 'true'
+            spec:
+              arguments:
+                parameters:
+                - name: repo
+                  value: https://github.com/kwangil77/simple.git
+                - name: revision
+                  value: main
+              workflowTemplateRef:
+                name: simple-code-analysis
+        parameters:
+        - src:
+            dependencyName: simple
+            dataKey: body.changes.0.ref.displayId
+          dest: spec.arguments.parameters.1.value
+  - template:
+      name: simple-deps-analysis
+      argoWorkflow:
+        operation: submit
+        source:
+          resource:
+            apiVersion: argoproj.io/v1alpha1
+            kind: Workflow
+            metadata:
+              generateName: simple-deps-analysis-
+              namespace: development
+              labels:
+                workflows.argoproj.io/workflow-template: simple-deps-analysis
+                submit-from-ui: 'true'
+            spec:
+              arguments:
+                parameters:
+                - name: repo
+                  value: https://github.com/kwangil77/simple.git
+                - name: revision
+                  value: main
+              workflowTemplateRef:
+                name: simple-deps-analysis
+        parameters:
+        - src:
+            dependencyName: simple
+            dataKey: body.changes.0.ref.displayId
+          dest: spec.arguments.parameters.1.value
+  - template:
+      name: simple-techdocs-publish
+      argoWorkflow:
+        operation: submit
+        source:
+          resource:
+            apiVersion: argoproj.io/v1alpha1
+            kind: Workflow
+            metadata:
+              generateName: simple-techdocs-publish-
+              namespace: development
+              labels:
+                workflows.argoproj.io/workflow-template: simple-techdocs-publish
+                submit-from-ui: 'true'
+            spec:
+              arguments:
+                parameters:
+                - name: repo
+                  value: https://github.com/kwangil77/simple.git
+                - name: revision
+                  value: main
+              workflowTemplateRef:
+                name: simple-techdocs-publish
+        parameters:
+        - src:
+            dependencyName: simple
+            dataKey: body.changes.0.ref.displayId
+          dest: spec.arguments.parameters.1.value

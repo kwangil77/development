@@ -1,0 +1,140 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Sensor
+metadata:
+  name: backstage
+spec:
+  template:
+    serviceAccountName: argo-workflow
+    nodeSelector:
+      kubernetes.io/arch: amd64
+      team: devops
+      service: devops-infra
+      performance_type: standard
+  dependencies:
+  - name: backstage
+    eventSourceName: argo-events
+    eventName: bitbucket-server
+    filters:
+      dataLogicalOperator: and
+      data:
+      - path: body.repository.links.clone.#(name=="http").href
+        type: string
+        value:
+        - https://github.com/kwangil77/backstage.git
+      - path: body.changes.0.ref.displayId
+        type: string
+        value:
+        - main
+  triggers:
+  - template:
+      name: backstage-publish
+      argoWorkflow:
+        operation: submit
+        source:
+          resource:
+            apiVersion: argoproj.io/v1alpha1
+            kind: Workflow
+            metadata:
+              generateName: backstage-publish-
+              namespace: development
+              labels:
+                workflows.argoproj.io/workflow-template: backstage-publish
+                submit-from-ui: 'true'
+            spec:
+              arguments:
+                parameters:
+                - name: repo
+                  value: https://github.com/kwangil77/backstage.git
+                - name: revision
+                  value: main
+              workflowTemplateRef:
+                name: backstage-publish
+        parameters:
+        - src:
+            dependencyName: backstage
+            dataKey: body.changes.0.ref.displayId
+          dest: spec.arguments.parameters.1.value
+  - template:
+      name: backstage-code-analysis
+      argoWorkflow:
+        operation: submit
+        source:
+          resource:
+            apiVersion: argoproj.io/v1alpha1
+            kind: Workflow
+            metadata:
+              generateName: backstage-code-analysis-
+              namespace: development
+              labels:
+                workflows.argoproj.io/workflow-template: backstage-code-analysis
+                submit-from-ui: 'true'
+            spec:
+              arguments:
+                parameters:
+                - name: repo
+                  value: https://github.com/kwangil77/backstage.git
+                - name: revision
+                  value: main
+              workflowTemplateRef:
+                name: backstage-code-analysis
+        parameters:
+        - src:
+            dependencyName: backstage
+            dataKey: body.changes.0.ref.displayId
+          dest: spec.arguments.parameters.1.value
+  - template:
+      name: backstage-deps-analysis
+      argoWorkflow:
+        operation: submit
+        source:
+          resource:
+            apiVersion: argoproj.io/v1alpha1
+            kind: Workflow
+            metadata:
+              generateName: backstage-deps-analysis-
+              namespace: development
+              labels:
+                workflows.argoproj.io/workflow-template: backstage-deps-analysis
+                submit-from-ui: 'true'
+            spec:
+              arguments:
+                parameters:
+                - name: repo
+                  value: https://github.com/kwangil77/backstage.git
+                - name: revision
+                  value: main
+              workflowTemplateRef:
+                name: backstage-deps-analysis
+        parameters:
+        - src:
+            dependencyName: backstage
+            dataKey: body.changes.0.ref.displayId
+          dest: spec.arguments.parameters.1.value
+  - template:
+      name: backstage-techdocs-publish
+      argoWorkflow:
+        operation: submit
+        source:
+          resource:
+            apiVersion: argoproj.io/v1alpha1
+            kind: Workflow
+            metadata:
+              generateName: backstage-techdocs-publish-
+              namespace: development
+              labels:
+                workflows.argoproj.io/workflow-template: backstage-techdocs-publish
+                submit-from-ui: 'true'
+            spec:
+              arguments:
+                parameters:
+                - name: repo
+                  value: https://github.com/kwangil77/backstage.git
+                - name: revision
+                  value: main
+              workflowTemplateRef:
+                name: backstage-techdocs-publish
+        parameters:
+        - src:
+            dependencyName: backstage
+            dataKey: body.changes.0.ref.displayId
+          dest: spec.arguments.parameters.1.value

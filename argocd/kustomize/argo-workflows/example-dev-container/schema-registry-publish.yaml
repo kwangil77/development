@@ -1,0 +1,61 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: schema-registry-publish
+spec:
+  entrypoint: publish
+  podGC:
+    strategy: OnPodCompletion
+  arguments:
+    parameters:
+    - name: repo
+      value: https://github.com/hortonworks/registry.git
+    - name: revision
+      value: 1.0.0-rc2
+  templates:
+  - name: publish
+    steps:
+    - - name: execute
+        template: execute
+  - name: execute
+    inputs:
+      artifacts:
+      - name: source
+        path: /src
+        git:
+          repo: "{{ workflow.parameters.repo }}"
+          revision: "{{ workflow.parameters.revision }}"
+    volumes:
+    - name: docker-config
+      secret:
+        secretName: docker-config
+        items:
+        - key: config.json
+          path: config.json
+    serviceAccountName: argo-workflow
+    container:
+      image: harbor.example.io/docker.io/library/openjdk:8
+      env:
+      - name: GRADLE_OPTS
+        value: -Djib.to.image=harbor.example.io/devops/schema-registry -Djib.to.tags=latest,1.0.0
+      command:
+      - "/bin/bash"
+      - "-c"
+      args:
+      - "
+        bash gradlew clean :hortonworks-registries-docker:jib -x test
+        "
+      workingDir: /src
+      resources:
+        requests:
+          memory: 1024Mi
+          cpu: 1000m
+      volumeMounts:
+      - name: docker-config
+        mountPath: /root/.docker/config.json
+        subPath: config.json
+    nodeSelector:
+      kubernetes.io/arch: amd64
+      team: devops
+      service: devops-infra
+      performance_type: standard

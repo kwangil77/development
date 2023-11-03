@@ -1,0 +1,96 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: simple-api-publish
+spec:
+  entrypoint: publish
+  podGC:
+    strategy: OnPodCompletion
+  arguments:
+    parameters:
+    - name: repo
+      value: https://github.com/kwangil77/simple.git
+    - name: revision
+      value: main
+  templates:
+  - name: publish
+    steps:
+    - - name: execute
+        template: execute
+  - name: execute
+    inputs:
+      artifacts:
+      - name: source
+        path: /src
+        git:
+          repo: "{{ workflow.parameters.repo }}"
+          revision: "{{ workflow.parameters.revision }}"
+          usernameSecret:
+            name: bitbucket-secret
+            key: username
+          passwordSecret:
+            name: bitbucket-secret
+            key: password
+    volumes:
+    - name: docker-config
+      secret:
+        secretName: docker-config
+        items:
+        - key: config.json
+          path: config.json
+    serviceAccountName: argo-workflow
+    container:
+      image: gcr.io/kaniko-project/executor:debug
+      env:
+      - name: POD_IP
+        valueFrom:
+          fieldRef:
+            fieldPath: status.podIP
+      command:
+      - "/busybox/sh"
+      - "-c"
+      args:
+      - "
+        /kaniko/executor --log-format=text
+          --context=/src
+          --dockerfile=/src/simple-api/Dockerfile
+          --build-arg=DB_HOST=${POD_IP}
+          --destination=harbor.example.io/devops/simple-api:latest
+          --destination=harbor.example.io/devops/simple-api:{{ workflow.creationTimestamp.Y }}{{ workflow.creationTimestamp.m }}{{ workflow.creationTimestamp.d }}{{ workflow.creationTimestamp.H }}{{ workflow.creationTimestamp.M }}
+        "
+      workingDir: /src
+      resources:
+        requests:
+          memory: 2048Mi
+          cpu: 2000m
+      volumeMounts:
+      - name: docker-config
+        mountPath: /kaniko/.docker/config.json
+        subPath: config.json
+    sidecars:
+    - name: mysql
+      image: harbor.example.io/docker.io/library/mysql:8
+      env:
+      - name: MYSQL_ALLOW_EMPTY_PASSWORD
+        value: 'true'
+      - name: MYSQL_DATABASE
+        value: simple
+      command:
+      - "docker-entrypoint.sh"
+      - "mysqld"
+      readinessProbe:
+        exec:
+          command:
+          - "/bin/bash"
+          - "-ec"
+          - "mysqladmin status -uroot"
+        initialDelaySeconds: 5
+        periodSeconds: 10
+        timeoutSeconds: 1
+        failureThreshold: 3
+        successThreshold: 1
+    nodeSelector:
+      kubernetes.io/arch: amd64
+      team: devops
+      service: devops-infra
+      performance_type: standard

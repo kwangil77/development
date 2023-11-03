@@ -1,0 +1,14 @@
+apiVersion: v2
+name: boundary
+description: A Helm chart for deploying Boundary.
+type: application
+version: 0.0.1
+appVersion: 0.7.3
+home: https://boundaryproject.io/
+keywords:
+  - boundary
+sources:
+  - https://github.com/hashicorp/boundary
+maintainers:
+  - name: kwangil77
+    email: kwangil77@hotmail.com

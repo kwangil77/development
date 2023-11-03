@@ -1,0 +1,112 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: simple-web-dev-cf-publish
+spec:
+  entrypoint: publish
+  podGC:
+    strategy: OnPodCompletion
+  arguments:
+    parameters:
+    - name: repo
+      value: https://github.com/kwangil77/deployment.git
+    - name: revision
+      value: main
+  templates:
+  - name: publish
+    steps:
+    - - name: sync
+        template: sync
+    - - name: create-invalidation
+        template: create-invalidation
+  - name: sync
+    inputs:
+      artifacts:
+      - name: source
+        path: /src
+        git:
+          repo: "{{ workflow.parameters.repo }}"
+          revision: "{{ workflow.parameters.revision }}"
+          usernameSecret:
+            name: bitbucket-secret
+            key: username
+          passwordSecret:
+            name: bitbucket-secret
+            key: password
+    volumes:
+    - name: aws-config
+      configMap:
+        name: aws-config
+        items:
+        - key: config
+          path: config
+    serviceAccountName: argo-workflow
+    container:
+      image: public.ecr.aws/sam/build-provided.al2
+      env:
+      - name: AWS_PROFILE
+        value: example-dev
+      - name: AWS_DEFAULT_REGION
+        value: ap-northeast-2
+      command:
+      - "/bin/sh"
+      - "-c"
+      args:
+      - "
+        cd argo-workflows/cloudfront/simple-web/simple-web-dev
+        && aws s3 sync . s3://example-dev-devops-bucket/simple-web.example.io
+        && aws s3 cp index.html s3://example-dev-devops-bucket/simple-web.example.io/index.html
+          --cache-control no-cache,no-store
+        "
+      workingDir: /src
+      resources:
+        requests:
+          memory: 128Mi
+          cpu: 50m
+      volumeMounts:
+      - name: aws-config
+        mountPath: /root/.aws/config
+        subPath: config
+    nodeSelector:
+      kubernetes.io/arch: amd64
+      team: devops
+      service: devops-infra
+      performance_type: standard
+  - name: create-invalidation
+    volumes:
+    - name: aws-config
+      configMap:
+        name: aws-config
+        items:
+        - key: config
+          path: config
+    serviceAccountName: argo-workflow
+    container:
+      image: harbor.example.io/devops/aws-handler
+      env:
+      - name: AWS_PROFILE
+        value: example-dev
+      - name: AWS_DEFAULT_REGION
+        value: ap-northeast-2
+      command:
+      - "/bin/sh"
+      - "-c"
+      args:
+      - "
+        python3 -u /cloudfront/create_invalidation.py
+          --distribution-id EUG7ZD0243OMC
+        "
+      workingDir: /src
+      resources:
+        requests:
+          memory: 128Mi
+          cpu: 50m
+      volumeMounts:
+      - name: aws-config
+        mountPath: /root/.aws/config
+        subPath: config
+    nodeSelector:
+      kubernetes.io/arch: amd64
+      team: devops
+      service: devops-infra
+      performance_type: standard

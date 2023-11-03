@@ -1,0 +1,14 @@
+apiVersion: v2
+name: ngrinder
+description: A Helm chart for deploying nGrinder.
+type: application
+version: 0.0.1
+appVersion: 3.5.5-p1
+home: http://naver.github.io/ngrinder/
+keywords:
+  - ngrinder
+sources:
+  - https://github.com/naver/ngrinder
+maintainers:
+  - name: kwangil77
+    email: kwangil77@hotmail.com

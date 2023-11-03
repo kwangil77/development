@@ -1,0 +1,74 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: awx-operator-kustomize
+spec:
+  entrypoint: publish
+  podGC:
+    strategy: OnPodCompletion
+  arguments:
+    parameters:
+    - name: repo
+      value: https://github.com/kwangil77/deployment.git
+    - name: revision
+      value: main
+    - name: path
+      value: argo-workflows/kustomize/awx-operator/example-dev
+    - name: context
+      value: arn:aws:eks:ap-northeast-2:...
+    - name: namespace
+      value: provisioning
+  templates:
+  - name: publish
+    steps:
+    - - name: kustomize
+        template: kustomize
+  - name: kustomize
+    inputs:
+      artifacts:
+      - name: source
+        path: /src
+        git:
+          repo: "{{ workflow.parameters.repo }}"
+          revision: "{{ workflow.parameters.revision }}"
+          usernameSecret:
+            name: bitbucket-secret
+            key: username
+          passwordSecret:
+            name: bitbucket-secret
+            key: password
+    volumes:
+    - name: kube-config
+      configMap:
+        name: kube-config
+        items:
+        - key: config
+          path: config
+    serviceAccountName: argo-workflow
+    container:
+      image: harbor.example.io/devops/k8s
+      envFrom:
+      - secretRef:
+          name: argocd-vault-plugin-secret
+      command:
+      - "/bin/bash"
+      - "-c"
+      args:
+      - "
+        cd {{ workflow.parameters.path }}
+        && kustomize build . | argocd-vault-plugin generate - | kubectl apply --context {{ workflow.parameters.context }} -n {{ workflow.parameters.namespace }} -f -
+        "
+      workingDir: /src
+      resources:
+        requests:
+          memory: 128Mi
+          cpu: 50m
+      volumeMounts:
+      - name: kube-config
+        mountPath: /root/.kube/config
+        subPath: config
+    nodeSelector:
+      kubernetes.io/arch: amd64
+      team: devops
+      service: devops-infra
+      performance_type: standard

@@ -1,0 +1,155 @@
+# Default values for aws-ecr-proxy.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+image:
+  repository: gfknorm/aws-ecr-proxy
+  # Overrides the image tag whose default is {{ .Chart.AppVersion }}
+  tag: latest
+  pullPolicy: Always
+  pullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+podAnnotations: {}
+
+podLabels: {}
+
+podSecurityContext: {}
+  # fsGroup: 1000
+
+securityContext: {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  # runAsUser: 1000
+
+priorityClassName: ""
+
+livenessProbe:
+  httpGet:
+    path: /v2/
+    port: http
+  initialDelaySeconds: 60
+  periodSeconds: 30
+  failureThreshold: 10
+  timeoutSeconds: 1
+
+readinessProbe:
+  httpGet:
+    path: /v2/
+    port: http
+  initialDelaySeconds: 60
+  periodSeconds: 30
+  failureThreshold: 10
+  timeoutSeconds: 1
+
+service:
+  type: ClusterIP
+  annotations: {}
+  port: 80
+
+ingress:
+  enabled: false
+  annotations: {}
+  ingressClassName: ""
+  hosts: []
+  #   - aws-ecr-proxy.local
+  tls: []
+  #   - hosts:
+  #       - aws-ecr-proxy.local
+  #       - aws-ecr-proxy-docker.local
+  #       - aws-ecr-proxy-docker-hosted.local
+  #     secretName: aws-ecr-proxy-local-tls
+
+resources: {}
+# We usually recommend not to specify default resources and to leave this as a conscious
+# choice for the user. This also increases chances charts run on environments with little
+# resources, such as Minikube. If you do want to specify resources, uncomment the following
+# lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+#   limits:
+#     cpu: 100m
+#     memory: 128Mi
+#   requests:
+#     cpu: 100m
+#     memory: 128Mi
+
+replicaCount: 1
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+env: []
+#   - name: VARIABLE
+#     value: my-value
+
+config:
+  nginx.conf.tmpl: |
+    events {
+      worker_connections 4096;
+    }
+
+    http {
+      resolver $RESOLVER;
+      ssl_certificate           /etc/nginx/ssl/default.crt;
+      ssl_certificate_key       /etc/nginx/ssl/default.key;
+      server {
+        listen 443 ssl;
+        listen 5000 ssl;
+        listen 80;
+
+        location ~ ^/(v1|v2)/[^/]+/?[^/]+/blobs/ {
+          set $upstream           $REGISTRY_URL;
+
+          proxy_pass              $upstream;
+          proxy_redirect          $upstream $scheme://$host:$server_port;
+
+          proxy_set_header        X-Real-IP            $remote_addr;
+          proxy_set_header        X-Forwarded-For      $remote_addr;
+          proxy_set_header        X-Forwarded-User     "Basic $USER";
+          proxy_set_header        Authorization        "Basic $CREDENTIALS";
+
+          proxy_pass_header       Server;
+
+          client_max_body_size    0;
+          proxy_connect_timeout   300s;
+          proxy_read_timeout      300s;
+          proxy_send_timeout      300s;
+          send_timeout            300s;
+        }
+        location ~ ^/(v1|v2)/ {
+          set $upstream           $REGISTRY_URL;
+
+          proxy_pass              $upstream;
+          proxy_redirect          $upstream $scheme://$host:$server_port;
+
+          proxy_set_header        X-Real-IP            $remote_addr;
+          proxy_set_header        X-Forwarded-For      $remote_addr;
+          proxy_set_header        X-Forwarded-User     "Basic $USER";
+          proxy_set_header        Authorization        "Basic $CREDENTIALS";
+
+          proxy_pass_header       Server;
+
+          client_max_body_size    0;
+          proxy_connect_timeout   300s;
+          proxy_read_timeout      300s;
+          proxy_send_timeout      300s;
+          send_timeout            300s;
+        }
+      }
+    }

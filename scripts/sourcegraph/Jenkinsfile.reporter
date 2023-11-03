@@ -1,0 +1,84 @@
+library identifier: 'example-pipeline-library', changelog: false
+
+def timestamp = new Date().format("yyyy-MM-dd'T'HH:mm:ss.SSSZ")
+def version = timestamp.substring(0, 10).replace('-', '')
+
+def sourcegraphs = [
+    [url: 'https://sourcegraph.example.io', credential: '...']
+]
+publishBasePipeline slackChannels: [], containers: [], {
+    currentBuild.displayName = "#${version}"
+
+    stage('Checkout') {
+        checkout scm
+    }
+    stage('Publish reports') {
+        infos = []
+
+        sourcegraphs.each { sourcegraph ->
+            withCredentials([string(credentialsId: sourcegraph.credential, variable: 'SG_TOKEN')]) {
+                customHeaders = [
+                    [
+                        name: 'Authorization',
+                        value: "token ${SG_TOKEN}"
+                    ]
+                ]
+                data = groovy.json.JsonOutput.toJson([
+                    query: 'query($query: String!) {search(query: $query) {results {results {... on FileMatch {file {repository {name}}}}}}}',
+                    variables: [
+                        query: 'repo:.* count:1000 case:yes distributionUrl=https\\\\://services.gradle.org/distributions/'
+                    ]
+                ])
+                response = httpRequest customHeaders: customHeaders, acceptType: 'APPLICATION_JSON', contentType: 'APPLICATION_JSON', httpMode: 'POST', requestBody: data, url: "${sourcegraph.url}/.api/graphql"
+                content = readJSON text: response.content
+
+                infos += content.data.search.results.results.collect { [search: sourcegraph.url, repository: it.file.repository.name] }
+            }
+        }
+        // urls = publishRepos()
+        repos = []
+
+        infos.unique()/*.findAll {
+            urls.contains(it.repository)
+        }*/.eachWithIndex { item, index ->
+            repos << "${index + 1}. <${item.search}/search?q=distributionUrl%3Dhttps%5C://services.gradle.org/distributions/+count:1000+repo:^${item.repository.replace('.', '\\.')}\$+&patternType=literal&case=yes|${item.repository}>"
+        }
+        slackNotifier build: currentBuild, channels: ['#devops_alert'], attachments: [
+            color: 'warning',
+            pretext: 'Incorrectly configured distributionUrl of gradle is searched by sourcegraph',
+            title: 'Target Repositories',
+            text: repos.join('\n') ?: 'N/A',
+            fields: [
+                [
+                    title: 'Target Count',
+                    value: "${repos.size()}",
+                    short: true
+                ],
+                [
+                    title: 'Guide',
+                    value: '<https://confluence.example.io/...|Jenkins FAQ: Gradle>',
+                    short: true
+                ]
+            ]
+        ], iconEmoji: ':sourcegraph:', username: 'sourcegraph'
+    }
+}
+
+def publishRepos(Map parameters = [:]) {
+    response = httpRequest url: 'https://cmdb-api.example.io/api/v1/scm/repositories?size=2000'
+    // println groovy.json.JsonOutput.prettyPrint(response.content)
+
+    content = readJSON text: response.content
+
+    if (content.data.content) {
+        return content.data.content.findAll {
+            it.repositoryType == 'NORMAL'
+        }.findResults {
+            it.tags.findResult {
+                tag -> tag.name == 'publish' ? tag.value : null
+            } ? "bitbucket.example.io/${it.project}/${it.name}" as String : null
+        }
+    } else {
+        return []
+    }
+}

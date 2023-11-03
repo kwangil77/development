@@ -1,0 +1,85 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: sourcegraph-publish
+spec:
+  entrypoint: publish
+  podGC:
+    strategy: OnPodCompletion
+  arguments:
+    parameters:
+    - name: repo
+      value: https://github.com/sourcegraph/sourcegraph.git
+    - name: revision
+      value: v5.0.6
+  templates:
+  - name: publish
+    steps:
+    - - name: execute
+        template: execute
+  - name: execute
+    inputs:
+      artifacts:
+      - name: source
+        path: /src
+        git:
+          repo: "{{ workflow.parameters.repo }}"
+          revision: "{{ workflow.parameters.revision }}"
+    volumes:
+    - name: docker-config
+      secret:
+        secretName: docker-config
+        items:
+        - key: config.json
+          path: config.json
+    serviceAccountName: argo-workflow
+    container:
+      image: harbor.example.io/docker.io/library/golang:1.19
+      env:
+      - name: DOCKER_HOST
+        value: 127.0.0.1
+      command:
+      - "/bin/sh"
+      - "-c"
+      args:
+      - "
+        curl -sL https://deb.nodesource.com/setup_16.x | bash -
+        && apt-get install -y nodejs musl-tools parallel npm
+        && npm install -g gulp pnpm@7.31.0
+        && curl -fsSL https://get.docker.com/ | sh
+        && bash cmd/server/pre-build.sh
+        && IMAGE=harbor.example.io/devops/sourcegraph:5.0.6 VERSION=5.0.6 bash cmd/server/build.sh github.com/sourcegraph/sourcegraph/cmd/frontend github.com/sourcegraph/sourcegraph/cmd/worker github.com/sourcegraph/sourcegraph/cmd/repo-updater github.com/sourcegraph/sourcegraph/cmd/symbols github.com/sourcegraph/sourcegraph/cmd/migrator
+        && docker push harbor.example.io/devops/sourcegraph:5.0.6
+        && docker tag harbor.example.io/devops/sourcegraph:5.0.6 harbor.example.io/devops/sourcegraph:latest
+        && docker push harbor.example.io/devops/sourcegraph:latest
+        "
+      workingDir: /src
+      resources:
+        requests:
+          memory: 1024Mi
+          cpu: 1000m
+      volumeMounts:
+      - name: docker-config
+        mountPath: /root/.docker/config.json
+        subPath: config.json
+    sidecars:
+    - name: dind
+      image: harbor.example.io/docker.io/library/docker:dind
+      imagePullPolicy: Always
+      env:
+      - name: DOCKER_TLS_CERTDIR
+        value: ''
+      securityContext:
+        privileged: true
+      command:
+      - "dockerd-entrypoint.sh"
+    nodeSelector:
+      kubernetes.io/arch: amd64
+      team: devops
+      service: devops-infra
+      performance_type: memory
+    tolerations:
+    - key: performance_type
+      operator: Equal
+      value: mem
+      effect: NoSchedule

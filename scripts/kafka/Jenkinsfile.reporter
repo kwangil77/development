@@ -1,0 +1,88 @@
+library identifier: 'example-pipeline-library', changelog: false
+
+def timestamp = new Date().format("yyyy-MM-dd'T'HH:mm:ss.SSSZ")
+def version = timestamp.substring(0, 10).replace('-', '')
+
+def elasticsearchUrl = 'https://....ap-northeast-2.es.amazonaws.com'
+def indexPrefix = 'kafka'
+def awsProfiles = [
+    'example-dev'
+]
+publishBasePipeline slackChannels: ['#devops_alert'], containers: [], {
+    currentBuild.displayName = "#${version}"
+
+    stage('Checkout') {
+        deleteDir()
+        checkout scm
+    }
+    stage('Prepare reports') {
+        httpRequest httpMode: 'DELETE', validResponseCodes: '100:599', url: "${elasticsearchUrl}/${indexPrefix}-${version}"
+        clusters = []
+
+        withAWS([region: 'ap-northeast-2']) {
+            awsProfiles.each { profile ->
+                output = sh returnStdout: true, script: """
+                    export AWS_PROFILE=${profile} && \
+                    aws kafka list-clusters
+                """
+                response = readJSON text: output
+
+                response.ClusterInfoList.each { cluster ->
+                    output = sh returnStdout: true, script: """
+                        export AWS_PROFILE=${profile} && \
+                        aws kafka list-nodes \
+                            --cluster-arn ${cluster.ClusterArn}
+                    """
+                    nodes = readJSON text: output
+
+                    resource = [Tags: [:]]
+
+                    try {
+                        output = sh returnStdout: true, script: """
+                            export AWS_PROFILE=${profile} && \
+                            aws kafka list-tags-for-resource \
+                                --resource-arn ${cluster.ClusterArn}
+                        """
+                        resource = readJSON text: output
+                    } catch (e) {}
+                    
+                    clusters << ([
+                        '@timestamp': timestamp,
+                        Account: profile
+                    ] << [
+                        Nodes: nodes.NodeInfoList,
+                        Tags: resource.Tags
+                    ] << cluster)
+                }
+            }
+        }
+        writeFile file: "${indexPrefix}-${version}.json", text: clusters.collect { '{"index":{}}\n' + groovy.json.JsonOutput.toJson(it) + '\n' }.join('')
+
+        archiveArtifacts artifacts: "${indexPrefix}-${version}.json", onlyIfSuccessful: true
+
+        devJobs = [[job_name: 'jmx-exporter', static_configs: [[targets: []]]], [job_name: 'node-exporter', static_configs: [[targets: []]]]]
+        prodJobs = [[job_name: 'jmx-exporter', static_configs: [[targets: []]]], [job_name: 'node-exporter', static_configs: [[targets: []]]]]
+
+        clusters.each { cluster ->
+            if (cluster.OpenMonitoring.Prometheus.JmxExporter.EnabledInBroker) {
+                (cluster.Account.endsWith('dev') ? devJobs : prodJobs)[0].static_configs[0].targets += cluster.Nodes.collect { node ->
+                    node.BrokerNodeInfo.Endpoints.collect { endpoint -> endpoint + ':11001' }
+                }.flatten()
+            }
+            if (cluster.OpenMonitoring.Prometheus.NodeExporter.EnabledInBroker) {
+                (cluster.Account.endsWith('dev') ? devJobs : prodJobs)[1].static_configs[0].targets += cluster.Nodes.collect { node ->
+                    node.BrokerNodeInfo.Endpoints.collect { endpoint -> endpoint + ':11002' }
+                }.flatten()
+            }
+        }
+        writeYaml file: "${indexPrefix}-dev.yaml", data: devJobs
+        writeYaml file: "${indexPrefix}-prod.yaml", data: prodJobs
+
+        archiveArtifacts artifacts: "${indexPrefix}-dev.yaml", onlyIfSuccessful: true
+        archiveArtifacts artifacts: "${indexPrefix}-prod.yaml", onlyIfSuccessful: true
+    }
+    stage('Publish reports') {
+        data = readFile "${indexPrefix}-${version}.json"
+        httpRequest acceptType: 'APPLICATION_JSON', contentType: 'APPLICATION_JSON', httpMode: 'POST', requestBody: data, url: "${elasticsearchUrl}/${indexPrefix}-${version}/_bulk"
+    }
+}

@@ -1,0 +1,275 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: simple-server-dev-eb-bluegreen-publish
+spec:
+  entrypoint: publish
+  podGC:
+    strategy: OnPodCompletion
+  arguments:
+    parameters:
+    - name: repo
+      value: https://github.com/kwangil77/deployment.git
+    - name: revision
+      value: main
+  templates:
+  - name: publish
+    steps:
+    - - name: create-application-version
+        template: create-application-version
+    - - name: expand-environment
+        template: expand-environment
+        arguments:
+          parameters:
+          - name: version
+            value: "{{ steps.create-application-version.outputs.parameters.version }}"
+    - - name: approval-swap
+        template: approval-swap
+    - - name: swap-environment-cnames
+        template: swap-environment-cnames
+        arguments:
+          parameters:
+          - name: environment-name
+            value: "{{ steps.expand-environment.outputs.parameters.environment-name }}"
+        when: '{{ steps.approval-swap.outputs.parameters.approve-swap }} == YES'
+    - - name: approval-shrink
+        template: approval-shrink
+    - - name: shrink-environment
+        template: shrink-environment
+        arguments:
+          parameters:
+          - name: environment-name
+            value: "{{ steps.swap-environment-cnames.outputs.parameters.environment-name }}"
+        when: '{{ steps.approval-shrink.outputs.parameters.approve-shrink }} == YES'
+  - name: create-application-version
+    inputs:
+      artifacts:
+      - name: source
+        path: /src
+        git:
+          repo: "{{ workflow.parameters.repo }}"
+          revision: "{{ workflow.parameters.revision }}"
+          usernameSecret:
+            name: bitbucket-secret
+            key: username
+          passwordSecret:
+            name: bitbucket-secret
+            key: password
+      parameters:
+      - name: version
+        value: "{{ workflow.creationTimestamp.Y }}{{ workflow.creationTimestamp.m }}{{ workflow.creationTimestamp.d }}{{ workflow.creationTimestamp.H }}{{ workflow.creationTimestamp.M }}"
+    outputs:
+      parameters:
+      - name: version
+        valueFrom:
+          path: /tmp/version
+    volumes:
+    - name: aws-config
+      configMap:
+        name: aws-config
+        items:
+        - key: config
+          path: config
+    serviceAccountName: argo-workflow
+    container:
+      image: public.ecr.aws/sam/build-provided.al2
+      env:
+      - name: AWS_PROFILE
+        value: example-dev
+      - name: AWS_DEFAULT_REGION
+        value: ap-northeast-2
+      command:
+      - "/bin/sh"
+      - "-c"
+      args:
+      - "
+        cd argo-workflows/elasticbeanstalk/simple-server/simple-server-dev
+        && zip simple-server-dev.zip -r .
+        && aws s3 cp simple-server-dev.zip s3://example-dev-devops-bucket/application/simple-server/{{ workflow.parameters.revision }}/simple-server-dev-{{ inputs.parameters.version }}.zip
+        && aws elasticbeanstalk create-application-version
+            --source-bundle S3Bucket=example-dev-devops-bucket,S3Key=application/simple-server/{{ workflow.parameters.revision }}/simple-server-dev-{{ inputs.parameters.version }}.zip
+            --application-name simple-server
+            --version-label simple-server-dev-{{ inputs.parameters.version }}
+        && echo '{{ inputs.parameters.version }}' > /tmp/version
+        "
+      workingDir: /src
+      resources:
+        requests:
+          memory: 128Mi
+          cpu: 50m
+      volumeMounts:
+      - name: aws-config
+        mountPath: /root/.aws/config
+        subPath: config
+    nodeSelector:
+      kubernetes.io/arch: amd64
+      team: devops
+      service: devops-infra
+      performance_type: standard
+  - name: expand-environment
+    inputs:
+      parameters:
+      - name: version
+    outputs:
+      parameters:
+      - name: environment-name
+        valueFrom:
+          path: /tmp/environment_name
+    volumes:
+    - name: aws-config
+      configMap:
+        name: aws-config
+        items:
+        - key: config
+          path: config
+    serviceAccountName: argo-workflow
+    container:
+      image: harbor.example.io/devops/aws-handler
+      env:
+      - name: AWS_PROFILE
+        value: example-dev
+      - name: AWS_DEFAULT_REGION
+        value: ap-northeast-2
+      command:
+      - "/bin/sh"
+      - "-c"
+      args:
+      - "
+        python3 -u /elasticbeanstalk/expand_environment.py
+          --environment-names simple-server-dev-blue simple-server-dev-green
+          --environment-cname simple-server-dev-active.ap-northeast-2.elasticbeanstalk.com
+          --version-label simple-server-dev-{{ inputs.parameters.version }}
+        "
+      activeDeadlineSeconds: 300
+      workingDir: /
+      resources:
+        requests:
+          memory: 128Mi
+          cpu: 50m
+      volumeMounts:
+      - name: aws-config
+        mountPath: /root/.aws/config
+        subPath: config
+    nodeSelector:
+      kubernetes.io/arch: amd64
+      team: devops
+      service: devops-infra
+      performance_type: standard
+  - name: approval-swap
+    suspend: {}
+    inputs:
+      parameters:
+      - name: approve-swap
+        default: 'NO'
+        enum:
+        - 'YES'
+        - 'NO'
+    outputs:
+      parameters:
+      - name: approve-swap
+        valueFrom:
+          supplied: {}
+  - name: swap-environment-cnames
+    inputs:
+      parameters:
+      - name: environment-name
+    outputs:
+      parameters:
+      - name: environment-name
+        valueFrom:
+          path: /tmp/environment_name
+    volumes:
+    - name: aws-config
+      configMap:
+        name: aws-config
+        items:
+        - key: config
+          path: config
+    serviceAccountName: argo-workflow
+    container:
+      image: harbor.example.io/devops/aws-handler
+      env:
+      - name: AWS_PROFILE
+        value: example-dev
+      - name: AWS_DEFAULT_REGION
+        value: ap-northeast-2
+      command:
+      - "/bin/sh"
+      - "-c"
+      args:
+      - "
+        python3 -u /elasticbeanstalk/swap_environment_cnames.py
+          --environment-names simple-server-dev-blue simple-server-dev-green
+          --environment-name {{ inputs.parameters.environment-name }}
+        "
+      activeDeadlineSeconds: 60
+      workingDir: /
+      resources:
+        requests:
+          memory: 128Mi
+          cpu: 50m
+      volumeMounts:
+      - name: aws-config
+        mountPath: /root/.aws/config
+        subPath: config
+    nodeSelector:
+      kubernetes.io/arch: amd64
+      team: devops
+      service: devops-infra
+      performance_type: standard
+  - name: approval-shrink
+    suspend: {}
+    inputs:
+      parameters:
+      - name: approve-shrink
+        default: 'NO'
+        enum:
+        - 'YES'
+        - 'NO'
+    outputs:
+      parameters:
+      - name: approve-shrink
+        valueFrom:
+          supplied: {}
+  - name: shrink-environment
+    inputs:
+      parameters:
+      - name: environment-name
+    volumes:
+    - name: aws-config
+      configMap:
+        name: aws-config
+        items:
+        - key: config
+          path: config
+    serviceAccountName: argo-workflow
+    container:
+      image: harbor.example.io/devops/aws-handler
+      env:
+      - name: AWS_PROFILE
+        value: example-dev
+      - name: AWS_DEFAULT_REGION
+        value: ap-northeast-2
+      command:
+      - "/bin/sh"
+      - "-c"
+      args:
+      - "
+        python3 -u /elasticbeanstalk/shrink_environment.py
+          --environment-name {{ inputs.parameters.environment-name }}
+        "
+      activeDeadlineSeconds: 300
+      workingDir: /
+      resources:
+        requests:
+          memory: 128Mi
+          cpu: 50m
+      volumeMounts:
+      - name: aws-config
+        mountPath: /root/.aws/config
+        subPath: config
+    nodeSelector:
+      kubernetes.io/arch: amd64
+      team: devops
+      service: devops-infra
+      performance_type: standard

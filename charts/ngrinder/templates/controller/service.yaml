@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "ngrinder.controller.fullname" . }}
+  labels:
+    {{- include "ngrinder.controller.labels" . | nindent 4 }}
+  {{- with .Values.controller.service.annotations }}
+  annotations:
+    {{ . | toYaml | trim | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.controller.service.type }}
+  ports:
+    - port: {{ .Values.controller.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+    - port: 16001
+      targetPort: controller
+      protocol: TCP
+      name: controller
+    {{- range $index, $port := untilStep 12000 (int (add .Values.agent.maxReplicas 12000)) 1 }}
+    - port: {{ $port }}
+      targetPort: console-{{ $index }}
+      protocol: TCP
+      name: console-{{ $index }}
+    {{- end }}
+  selector:
+    {{- include "ngrinder.controller.selectorLabels" . | nindent 4 }}

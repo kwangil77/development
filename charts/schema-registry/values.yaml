@@ -1,0 +1,172 @@
+# Default values for schema-registry.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+image:
+  repository: schema-registry
+  # Overrides the image tag whose default is {{ .Chart.AppVersion }}
+  tag: ""
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+podAnnotations: {}
+
+podLabels: {}
+
+podSecurityContext: {}
+  # fsGroup: 1000
+
+securityContext: {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  # runAsUser: 1000
+
+priorityClassName: ""
+
+livenessProbe:
+  httpGet:
+    path: /
+    port: http
+  initialDelaySeconds: 60
+  periodSeconds: 30
+  failureThreshold: 10
+  timeoutSeconds: 1
+
+readinessProbe:
+  httpGet:
+    path: /
+    port: http
+  initialDelaySeconds: 60
+  periodSeconds: 30
+  failureThreshold: 10
+  timeoutSeconds: 1
+
+service:
+  type: ClusterIP
+  annotations: {}
+  port: 9090
+
+ingress:
+  enabled: false
+  annotations: {}
+  ingressClassName: ""
+  hosts: []
+  #   - schema-registry.local
+  tls: []
+  #   - hosts:
+  #       - schema-registry.local
+  #       - schema-registry-docker.local
+  #       - schema-registry-docker-hosted.local
+  #     secretName: schema-registry-local-tls
+
+resources: {}
+# We usually recommend not to specify default resources and to leave this as a conscious
+# choice for the user. This also increases chances charts run on environments with little
+# resources, such as Minikube. If you do want to specify resources, uncomment the following
+# lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+#   limits:
+#     cpu: 100m
+#     memory: 128Mi
+#   requests:
+#     cpu: 100m
+#     memory: 128Mi
+
+replicaCount: 1
+
+initContainers: []
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+config:
+  registry.yaml: |
+    atlas:
+      enabled: false
+      atlasUrls:
+        - http://<atlas host url>:31000
+      basicAuth:
+        username: "kafka"
+        password: "cloudera"
+
+    schemaProviders:
+      - providerClass: "com.hortonworks.registries.schemaregistry.avro.AvroSchemaProvider"
+        defaultSerializerClass: "com.hortonworks.registries.schemaregistry.serdes.avro.AvroSnapshotSerializer"
+        defaultDeserializerClass: "com.hortonworks.registries.schemaregistry.serdes.avro.AvroSnapshotDeserializer"
+        hashFunction: "MD5"
+      - providerClass: "com.hortonworks.registries.schemaregistry.json.JsonSchemaProvider"
+        defaultSerializerClass: "com.hortonworks.registries.schemaregistry.serdes.json.JsonSnapshotSerializer"
+        defaultDeserializerClass: "com.hortonworks.registries.schemaregistry.serdes.json.JsonSnapshotDeserializer"
+        hashFunction: "MD5"
+
+    servletFilters:
+    - className: "com.hortonworks.registries.schemaregistry.webservice.RewriteUriFilter"
+      params:
+        forwardPaths: "/api/v1/confluent,/subjects/*,/schemas/ids/*"
+        redirectPaths: "/ui/,/"
+
+    fileStorageConfiguration:
+      className: "com.hortonworks.registries.common.util.LocalFileSystemStorage"
+      properties:
+        directory: "/tmp/schema-registry/jars"
+
+    storageProviderConfiguration:
+      providerClass: "com.hortonworks.registries.storage.impl.jdbc.JdbcStorageManager"
+      properties:
+        db.type: "mysql"
+        queryTimeoutInSecs: 30
+        offsetRange:
+          min: 1
+          max: 10000000
+        db.properties:
+          dataSourceClassName: "com.mysql.jdbc.jdbc2.optional.MysqlDataSource"
+          dataSource.url: "jdbc:mysql://localhost/schema_registry"
+          dataSource.user: "registry_user"
+          dataSource.password: "registry_password"
+
+    swagger:
+      resourcePackage: com.hortonworks.registries.schemaregistry.webservice,com.cloudera.dim.atlas
+
+    enableCors: true
+
+    compatibility:
+      avroCompatibility: "BACKWARD"
+      jsonCompatibility: "NONE"
+      validationLevel: "ALL"
+
+    server:
+      allowedMethods: 
+        - GET
+        - POST
+        - PUT
+        - DELETE
+        - HEAD
+        - OPTIONS
+      applicationConnectors:
+        - type: http
+          port: 9090
+      adminConnectors:
+        - type: http
+          port: 9091
+
+    logging:
+      level: INFO
+      loggers:
+        com.hortonworks.registries: INFO

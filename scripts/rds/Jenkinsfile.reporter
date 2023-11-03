@@ -1,0 +1,94 @@
+library identifier: 'example-pipeline-library', changelog: false
+
+def timestamp = new Date().format("yyyy-MM-dd'T'HH:mm:ss.SSSZ")
+def version = timestamp.substring(0, 10).replace('-', '')
+
+def elasticsearchUrl = 'https://....ap-northeast-2.es.amazonaws.com'
+def indexPrefix = 'rds'
+def awsProfiles = [
+    'example-dev'
+]
+publishBasePipeline slackChannels: ['#devops_alert'], containers: [], {
+    currentBuild.displayName = "#${version}"
+
+    stage('Checkout') {
+        deleteDir()
+        checkout scm
+    }
+    stage('Prepare reports') {
+        httpRequest httpMode: 'DELETE', validResponseCodes: '100:599', url: "${elasticsearchUrl}/${indexPrefix}-${version}"
+        clusters = []
+
+        withAWS([region: 'ap-northeast-2']) {
+            awsProfiles.each { profile ->
+                output = sh returnStdout: true, script: """
+                    export AWS_PROFILE=${profile} && \
+                    aws sts get-caller-identity
+                """
+                response = readJSON text: output
+                accountId = response.Account
+
+                output = sh returnStdout: true, script: """
+                    export AWS_PROFILE=${profile} && \
+                    aws rds describe-db-clusters
+                """
+                response = readJSON text: output
+
+                response.DBClusters.each { cluster ->
+                    instances = []
+
+                    cluster.DBClusterMembers.each { member ->
+                        output = sh returnStdout: true, script: """
+                            export AWS_PROFILE=${profile} && \
+                            aws rds describe-db-instances \
+                                --db-instance-identifier ${member.DBInstanceIdentifier}
+                        """
+                        members = readJSON text: output
+                        instance = members.DBInstances.first()
+
+                        resource = [TagList: []]
+
+                        try {
+                            output = sh returnStdout: true, script: """
+                                export AWS_PROFILE=${profile} && \
+                                aws rds list-tags-for-resource \
+                                    --resource-name ${instance.DBInstanceArn}
+                            """
+                            resource = readJSON text: output
+                        } catch (e) {}
+                        
+                        instances << ([
+                            Tags: resource.TagList.collectEntries { [it.Key, it.Value] }
+                        ] << instance)
+                    }
+                    resource = [TagList: []]
+
+                    try {
+                        output = sh returnStdout: true, script: """
+                            export AWS_PROFILE=${profile} && \
+                            aws rds list-tags-for-resource \
+                                --resource-name ${cluster.DBClusterArn}
+                        """
+                        resource = readJSON text: output
+                    } catch (e) {}
+                    
+                    clusters << ([
+                        '@timestamp': timestamp,
+                        Account: profile
+                    ] << [
+                        AccountId: accountId,
+                        Instances: instances,
+                        Tags: resource.TagList.collectEntries { [it.Key, it.Value] }
+                    ] << cluster)
+                }
+            }
+        }
+        writeFile file: "${indexPrefix}-${version}.json", text: clusters.collect { '{"index":{}}\n' + groovy.json.JsonOutput.toJson(it) + '\n' }.join('')
+
+        archiveArtifacts artifacts: "${indexPrefix}-${version}.json", onlyIfSuccessful: true
+    }
+    stage('Publish reports') {
+        data = readFile "${indexPrefix}-${version}.json"
+        httpRequest acceptType: 'APPLICATION_JSON', contentType: 'APPLICATION_JSON', httpMode: 'POST', requestBody: data, url: "${elasticsearchUrl}/${indexPrefix}-${version}/_bulk"
+    }
+}

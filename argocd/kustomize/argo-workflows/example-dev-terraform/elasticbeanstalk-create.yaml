@@ -1,0 +1,271 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: elasticbeanstalk-create
+spec:
+  entrypoint: create
+  podGC:
+    strategy: OnPodCompletion
+  arguments:
+    parameters:
+    - name: repo
+      value: https://github.com/kwangil77/deployment.git
+    - name: revision
+      value: main
+    - name: aws-profile
+      value: example-dev
+    - name: application-name
+      value: test
+    - name: environment-name
+      value: test-dev
+    - name: environment-cname
+      value: ''
+    - name: load-balancer-type
+      default: application
+      enum:
+      - application
+      - network
+    - name: shared-load-balancer
+      value: ''
+    - name: processor
+      default: x86_64
+      enum:
+      - x86_64
+      - arm64
+    - name: instance-type
+      value: t3.small
+    - name: stack-name
+      default: Docker
+      enum:
+      - Corretto 17
+      - Corretto 11
+      - Corretto 8
+      - Node.js 18
+      - Node.js 16
+      - Node.js 14
+      - PHP 8.1
+      - PHP 8.0
+      - Docker
+      - ECS
+      - Go 1
+      - Python 3.8
+      - Python 3.7
+      - Tomcat 8.5 Corretto 11
+      - Tomcat 8.5 Corretto 8
+    - name: visibility
+      default: internal
+      enum:
+      - internal
+      - public
+    - name: use-spot
+      default: 'YES'
+      enum:
+      - 'YES'
+      - 'NO'
+    - name: use-isms-p
+      default: 'NO'
+      enum:
+      - 'YES'
+      - 'NO'
+    - name: use-pci-dss
+      default: 'NO'
+      enum:
+      - 'YES'
+      - 'NO'
+    - name: tag-environment
+      default: dev
+      enum:
+      - dev
+      - qa
+      - stage
+      - prod
+    - name: tag-server
+      value: was
+    - name: tag-service
+      value: ''
+    - name: tag-security-level
+      default: moderate
+      enum:
+      - high
+      - moderate
+      - low
+    - name: tag-team
+      value: devops
+    - name: tag-part
+      value: devops
+  templates:
+  - name: create
+    steps:
+    - - name: prepare-environment
+        template: prepare-environment
+    - - name: create-environment
+        template: create-environment
+        arguments:
+          parameters:
+          - name: role-arn
+            value: "{{ steps.prepare-environment.outputs.parameters.role-arn }}"
+          - name: option-settings
+            value: "{{ steps.prepare-environment.outputs.parameters.option-settings }}"
+          - name: tags
+            value: "{{ steps.prepare-environment.outputs.parameters.tags }}"
+  - name: prepare-environment
+    inputs:
+      parameters:
+      - name: use-spot
+        value: '--use-spot'
+      - name: no-use-spot
+        value: '--no-use-spot'
+      - name: use-isms-p
+        value: '--use-isms-p'
+      - name: no-use-isms-p
+        value: '--no-use-isms-p'
+      - name: use-pci-dss
+        value: '--use-pci-dss'
+      - name: no-use-pci-dss
+        value: '--no-use-pci-dss'
+    outputs:
+      parameters:
+      - name: role-arn
+        valueFrom:
+          path: /tmp/role_arn
+      - name: option-settings
+        valueFrom:
+          path: /tmp/option_settings
+      - name: tags
+        valueFrom:
+          path: /tmp/tags
+    volumes:
+    - name: aws-config
+      configMap:
+        name: aws-config
+        items:
+        - key: config
+          path: config
+    serviceAccountName: argo-workflow
+    container:
+      image: harbor.example.io/devops/aws-handler
+      env:
+      - name: AWS_PROFILE
+        value: "{{ workflow.parameters.aws-profile }}"
+      - name: AWS_DEFAULT_REGION
+        value: ap-northeast-2
+      - name: CMDB_API_URL
+        value: https://cmdb-api.example.io
+      command:
+      - "/bin/sh"
+      - "-c"
+      args:
+      - "
+        python3 -u /elasticbeanstalk/prepare_environment.py
+          --application-name {{ workflow.parameters.application-name }}
+          --environment-name {{ workflow.parameters.environment-name }}
+          --instance-type {{ workflow.parameters.instance-type }}
+          --load-balancer-type {{ workflow.parameters.load-balancer-type }}
+          --shared-load-balancer {{ workflow.parameters.shared-load-balancer }}
+          {{= sprig.ternary(inputs.parameters['use-spot'], inputs.parameters['no-use-spot'], workflow.parameters['use-spot'] == 'YES') }}
+          {{= sprig.ternary(inputs.parameters['use-isms-p'], inputs.parameters['no-use-isms-p'], workflow.parameters['use-isms-p'] == 'YES') }}
+          {{= sprig.ternary(inputs.parameters['use-pci-dss'], inputs.parameters['no-use-pci-dss'], workflow.parameters['use-pci-dss'] == 'YES') }}
+          --tag-environment {{ workflow.parameters.tag-environment }}
+          --tag-part {{ workflow.parameters.tag-part }}
+          --tag-creator {{= sprig.split('.', sprig.get(workflow.labels.workflows.argoproj, 'io/creator-email'))._0 }}
+        && python3 -u /get_role_arn.py
+          --tag-part {{ workflow.parameters.tag-part }}
+        "
+      workingDir: /
+      resources:
+        requests:
+          memory: 128Mi
+          cpu: 50m
+      volumeMounts:
+      - name: aws-config
+        mountPath: /root/.aws/config
+        subPath: config
+    nodeSelector:
+      kubernetes.io/arch: amd64
+      team: devops
+      service: devops-infra
+      performance_type: standard
+  - name: create-environment
+    inputs:
+      artifacts:
+      - name: source
+        path: /src
+        git:
+          repo: "{{ workflow.parameters.repo }}"
+          revision: "{{ workflow.parameters.revision }}"
+          usernameSecret:
+            name: bitbucket-secret
+            key: username
+          passwordSecret:
+            name: bitbucket-secret
+            key: password
+      parameters:
+      - name: role-arn
+      - name: option-settings
+      - name: tags
+    volumes:
+    - name: aws-config
+      configMap:
+        name: aws-config
+        items:
+        - key: config
+          path: config
+    - name: terraform-config
+      secret:
+        secretName: terraform-config
+        items:
+        - key: config.pg.tfbackend
+          path: config.pg.tfbackend
+    serviceAccountName: argo-workflow
+    container:
+      image: harbor.example.io/docker.io/hashicorp/terraform
+      env:
+      - name: AWS_PROFILE
+        value: "{{ workflow.parameters.aws-profile }}"
+      - name: AWS_DEFAULT_REGION
+        value: ap-northeast-2
+      command:
+      - "/bin/sh"
+      - "-c"
+      args:
+      - "
+        cd /src/terraform/modules/elasticbeanstalk
+        && terraform init -backend-config=/root/.terraform/config.pg.tfbackend
+        && terraform workspace new '{{ workflow.parameters.aws-profile }}:{{ workflow.parameters.environment-name }}' || terraform workspace select '{{ workflow.parameters.aws-profile }}:{{ workflow.parameters.environment-name }}'
+        && terraform apply -auto-approve
+          -var \"profile=${AWS_PROFILE}\"
+          -var 'name={{ workflow.parameters.environment-name }}'
+          -var 'lb_type={{ workflow.parameters.load-balancer-type }}'
+          -var 'processor={{ workflow.parameters.processor }}'
+          -var 'instance_type={{ workflow.parameters.instance-type }}'
+          -var 'stack_name={{ workflow.parameters.stack-name }}'
+          -var 'visibility={{ workflow.parameters.visibility }}'
+          -var 'team={{ workflow.parameters.tag-team }}'
+          -var 'server={{ workflow.parameters.tag-server }}'
+          -var 'service={{= sprig.ternary(workflow.parameters['application-name'], workflow.parameters['tag-service'], workflow.parameters['tag-service'] == '') }}'
+          -var 'security_level={{ workflow.parameters.tag-security-level }}'
+          -var 'environment={{ workflow.parameters.tag-environment }}'
+          -var 'part={{ workflow.parameters.tag-part }}'
+          -var 'application={{ workflow.parameters.application-name }}'
+          -var 'cname={{= sprig.ternary(workflow.parameters['environment-name'], workflow.parameters['environment-cname'], workflow.parameters['environment-cname'] == '') }}'
+          -var 'role_arn={{ inputs.parameters.role-arn }}'
+          -var 'setting={{ inputs.parameters.option-settings }}'
+          -var 'tags={{ inputs.parameters.tags }}'
+        "
+      workingDir: /src
+      resources:
+        requests:
+          memory: 128Mi
+          cpu: 50m
+      volumeMounts:
+      - name: aws-config
+        mountPath: /root/.aws/config
+        subPath: config
+      - name: terraform-config
+        mountPath: /root/.terraform/config.pg.tfbackend
+        subPath: config.pg.tfbackend
+    nodeSelector:
+      kubernetes.io/arch: amd64
+      team: devops
+      service: devops-infra
+      performance_type: standard

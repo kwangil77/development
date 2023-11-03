@@ -1,0 +1,14 @@
+apiVersion: v2
+name: sourcegraph
+description: A Helm chart for deploying SourceGraph.
+type: application
+version: 0.0.1
+appVersion: 3.29.0
+home: https://about.sourcegraph.com/
+keywords:
+  - sourcegraph
+sources:
+  - https://github.com/sourcegraph/sourcegraph/
+maintainers:
+  - name: kwangil77
+    email: kwangil77@hotmail.com

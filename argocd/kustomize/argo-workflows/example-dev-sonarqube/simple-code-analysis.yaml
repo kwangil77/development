@@ -1,0 +1,93 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: simple-code-analysis
+spec:
+  entrypoint: analysis
+  podGC:
+    strategy: OnPodCompletion
+  arguments:
+    parameters:
+    - name: repo
+      value: https://github.com/kwangil77/simple.git
+    - name: revision
+      value: main
+  templates:
+  - name: analysis
+    steps:
+    - - name: execute
+        template: execute
+  - name: execute
+    inputs:
+      artifacts:
+      - name: source
+        path: /src
+        git:
+          repo: "{{ workflow.parameters.repo }}"
+          revision: "{{ workflow.parameters.revision }}"
+          usernameSecret:
+            name: bitbucket-secret
+            key: username
+          passwordSecret:
+            name: bitbucket-secret
+            key: password
+    serviceAccountName: argo-workflow
+    container:
+      image: harbor.example.io/docker.io/library/eclipse-temurin:17-jammy
+      env:
+      - name: GRADLE_OPTS
+        value: --add-opens=java.prefs/java.util.prefs=ALL-UNNAMED
+      - name: SONAR_HOST_URL
+        valueFrom:
+          secretKeyRef:
+            name: sonarqube-secret
+            key: host.url
+      - name: SONAR_TOKEN
+        valueFrom:
+          secretKeyRef:
+            name: sonarqube-secret
+            key: token
+      command:
+      - "/bin/sh"
+      - "-c"
+      args:
+      - "
+        ./gradlew clean flywayMigrate schemaRegistryDownload test jacocoTestReport sonar --console=plain
+          -Dflyway.url=jdbc:mariadb://127.0.0.1:3306/simple?allowPublicKeyRetrieval=true\\&useSSL=false
+          -Dsonar.host.url=${SONAR_HOST_URL}
+          -Dsonar.token=${SONAR_TOKEN}
+          -Dsonar.links.homepage={{ workflow.parameters.repo }}
+          -Dsonar.links.scm={{ workflow.parameters.repo }}
+        "
+      workingDir: /src
+      resources:
+        requests:
+          memory: 2048Mi
+          cpu: 2000m
+    sidecars:
+    - name: mysql
+      image: harbor.example.io/docker.io/library/mysql:8
+      env:
+      - name: MYSQL_ALLOW_EMPTY_PASSWORD
+        value: 'true'
+      - name: MYSQL_DATABASE
+        value: simple
+      command:
+      - "docker-entrypoint.sh"
+      - "mysqld"
+      readinessProbe:
+        exec:
+          command:
+          - "/bin/bash"
+          - "-ec"
+          - "mysqladmin status -uroot"
+        initialDelaySeconds: 5
+        periodSeconds: 10
+        timeoutSeconds: 1
+        failureThreshold: 3
+        successThreshold: 1
+    nodeSelector:
+      kubernetes.io/arch: amd64
+      team: devops
+      service: devops-infra
+      performance_type: standard

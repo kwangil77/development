@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: EventSource
+metadata:
+  name: argo-events
+spec:
+  template:
+    nodeSelector:
+      kubernetes.io/arch: amd64
+      team: devops
+      service: devops-infra
+      performance_type: standard
+  service:
+    ports:
+    - port: 12000
+      targetPort: 12000
+  webhook:
+    bitbucket-server:
+      endpoint: /push
+      port: "12000"
+      method: POST

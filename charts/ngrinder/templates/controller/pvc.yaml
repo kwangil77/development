@@ -1,0 +1,25 @@
+{{- if and .Values.controller.persistence.enabled (not .Values.controller.persistence.existingClaim) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "ngrinder.controller.pvcname" . }}
+  labels:
+    {{- include "ngrinder.controller.labels" . | nindent 4 }}
+  {{- with .Values.controller.persistence.annotations }}
+  annotations:
+    {{ . | toYaml | trim | nindent 4 }}
+  {{- end }}
+spec:
+  accessModes:
+    - {{ .Values.controller.persistence.accessMode | quote }}
+  resources:
+    requests:
+      storage: {{ .Values.controller.persistence.size | quote }}
+  {{- with .Values.controller.persistence.storageClass }}
+  {{- if (eq "-" .) }}
+  storageClassName: ""
+  {{- else }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  {{- end }}
+{{- end }}

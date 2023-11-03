@@ -1,0 +1,111 @@
+library identifier: 'example-pipeline-library', changelog: false
+
+def timestamp = new Date().format("yyyy-MM-dd'T'HH:mm:ss.SSSZ")
+def version = timestamp.substring(0, 10).replace('-', '')
+
+def sonarqubeUrl = 'https://sonar.example.io'
+def severities = ['BLOCKER', 'CRITICAL']
+def bitbucketUrl = 'https://bitbucket.example.io'
+def elasticsearchUrl = 'https://....ap-northeast-2.es.amazonaws.com'
+def indexPrefix = 'sonar_issues'
+
+publishBasePipeline /*nodeLabel: 'built-in', */slackChannels: ['#devops_alert'], containers: [], {
+    currentBuild.displayName = "#${version}"
+
+    stage('Checkout') {
+        deleteDir()
+        checkout scm
+    }
+    stage('Prepare reports') {
+        httpRequest httpMode: 'DELETE', validResponseCodes: '100:599', url: "${elasticsearchUrl}/${indexPrefix}-${version}"
+        repos = []
+
+        response = httpRequest authentication: '...', url: "${bitbucketUrl}/rest/api/1.0/projects/?limit=100"
+        projects = readJSON text: response.content
+
+        projects.values.each { project ->
+            response = httpRequest authentication: '...', url: "${bitbucketUrl}/rest/api/1.0/projects/${project.key}/repos/?limit=1000"
+            content = readJSON text: response.content
+
+            content.values.each { repo ->
+                repos << [
+                    '@timestamp': timestamp,
+                    team: project.key.toLowerCase(),
+                    scm: repo.links.clone.findResult { it.name == 'http' ? it.href : null }
+                ]
+            }
+        }
+        projects = []
+        git_urls = [:]
+
+        withCredentials([string(credentialsId: '...', variable: 'SONAR_TOKEN')]) {
+            customHeaders = [
+                [
+                    name: 'Authorization',
+                    value: "Basic ${(SONAR_TOKEN + ':').bytes.encodeBase64().toString()}"
+                ]
+            ]
+            response = httpRequest customHeaders: customHeaders, url: "${sonarqubeUrl}/api/projects/search?ps=500"
+            content = readJSON text: response.content
+
+            content.components.each { component ->
+                response = httpRequest customHeaders: customHeaders, url: "${sonarqubeUrl}/api/project_links/search?projectKey=${component.key}"
+                project = readJSON text: response.content
+                scm = project.links.findResult { it.type.contains('scm') ? it.url : null }
+
+                if (scm) {
+                    git_url = git_urls[scm]
+
+                    if (!git_url) {
+                        try {
+                            git_url = gitRepo git_url: scm
+                        } catch (e) {
+                            git_url = scm
+                        }
+                        git_urls[scm] = git_url
+                    }
+                    try {
+                        response = httpRequest customHeaders: customHeaders, url: "${sonarqubeUrl}/api/issues/search?severities=${severities.join(',')}&componentKeys=${component.key}&ps=1&resolved=false"
+                        issues = readJSON text: response.content
+
+                        projects << [
+                            scm: git_url,
+                            ci: project.links.findResult { it.type.contains('ci') ? it.url : null },
+                            count: issues.total,
+                            effort: issues.effortTotal
+                        ]
+                    } catch (e) {}
+                }
+            }
+        }
+        issues = projects.groupBy({ project -> project.scm })
+
+        repos.findAll {
+            issues[it.scm] != null
+        }.each { repo ->
+            repo << [
+                ci: issues[repo.scm].ci.first(),
+                count: issues[repo.scm].count.sum(),
+                effort: issues[repo.scm].effort.sum()
+            ]
+        }
+        // output = sh returnStdout: true, script: """
+        //     grep -Po "<url>\\Khttps://bitbucket.example.io/.*(?=</url>)" /var/jenkins_home/jobs/*/config.xml | awk '{split(\$0,a,"/config.xml:"); print a[2]}' | sort | uniq
+        // """
+        // urls = output.split('\n')
+        urls = publishScms()
+
+        repos.each { repo ->
+            repo << [
+                publish: urls.contains(repo.scm)
+            ]
+        }
+        writeFile file: "${indexPrefix}-${version}.json", text: repos.collect { '{"index":{}}\n' + groovy.json.JsonOutput.toJson(it) + '\n' }.join('')
+
+        archiveArtifacts artifacts: "${indexPrefix}-${version}.json", onlyIfSuccessful: true
+    }
+    stage('Publish reports') {
+        data = readFile "${indexPrefix}-${version}.json"
+        httpRequest acceptType: 'APPLICATION_JSON', contentType: 'APPLICATION_JSON', httpMode: 'POST', requestBody: data, url: "${elasticsearchUrl}/${indexPrefix}-${version}/_bulk"
+    }
+}

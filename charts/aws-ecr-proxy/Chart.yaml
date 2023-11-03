@@ -1,0 +1,14 @@
+apiVersion: v2
+name: aws-ecr-proxy
+description: A Helm chart for deploying AWS ECR Proxy.
+type: application
+version: 0.0.1
+appVersion: 1.2.0
+home: https://github.com/GfK-NORM/aws-ecr-proxy
+keywords:
+  - aws-ecr-proxy
+sources:
+  - https://github.com/GfK-NORM/aws-ecr-proxy
+maintainers:
+  - name: kwangil77
+    email: kwangil77@hotmail.com

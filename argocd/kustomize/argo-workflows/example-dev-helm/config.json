@@ -1,0 +1,4 @@
+{
+  "release_name": "argo-workflows-helm",
+  "release_namespace": "development"
+}

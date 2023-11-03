@@ -1,0 +1,133 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: simple-server-dev-eb-publish
+spec:
+  entrypoint: publish
+  podGC:
+    strategy: OnPodCompletion
+  arguments:
+    parameters:
+    - name: repo
+      value: https://github.com/kwangil77/deployment.git
+    - name: revision
+      value: main
+  templates:
+  - name: publish
+    steps:
+    - - name: create-application-version
+        template: create-application-version
+    - - name: update-environment
+        template: update-environment
+        arguments:
+          parameters:
+          - name: version
+            value: "{{ steps.create-application-version.outputs.parameters.version }}"
+  - name: create-application-version
+    inputs:
+      artifacts:
+      - name: source
+        path: /src
+        git:
+          repo: "{{ workflow.parameters.repo }}"
+          revision: "{{ workflow.parameters.revision }}"
+          usernameSecret:
+            name: bitbucket-secret
+            key: username
+          passwordSecret:
+            name: bitbucket-secret
+            key: password
+      parameters:
+      - name: version
+        value: "{{ workflow.creationTimestamp.Y }}{{ workflow.creationTimestamp.m }}{{ workflow.creationTimestamp.d }}{{ workflow.creationTimestamp.H }}{{ workflow.creationTimestamp.M }}"
+    outputs:
+      parameters:
+      - name: version
+        valueFrom:
+          path: /tmp/version
+    volumes:
+    - name: aws-config
+      configMap:
+        name: aws-config
+        items:
+        - key: config
+          path: config
+    serviceAccountName: argo-workflow
+    container:
+      image: public.ecr.aws/sam/build-provided.al2
+      env:
+      - name: AWS_PROFILE
+        value: example-dev
+      - name: AWS_DEFAULT_REGION
+        value: ap-northeast-2
+      command:
+      - "/bin/sh"
+      - "-c"
+      args:
+      - "
+        cd argo-workflows/elasticbeanstalk/simple-server/simple-server-dev
+        && zip simple-server-dev.zip -r .
+        && aws s3 cp simple-server-dev.zip s3://example-dev-devops-bucket/application/simple-server/{{ workflow.parameters.revision }}/simple-server-dev-{{ inputs.parameters.version }}.zip
+        && aws elasticbeanstalk create-application-version
+            --source-bundle S3Bucket=example-dev-devops-bucket,S3Key=application/simple-server/{{ workflow.parameters.revision }}/simple-server-dev-{{ inputs.parameters.version }}.zip
+            --application-name simple-server
+            --version-label simple-server-dev-{{ inputs.parameters.version }}
+        && echo '{{ inputs.parameters.version }}' > /tmp/version
+        "
+      workingDir: /src
+      resources:
+        requests:
+          memory: 128Mi
+          cpu: 50m
+      volumeMounts:
+      - name: aws-config
+        mountPath: /root/.aws/config
+        subPath: config
+    nodeSelector:
+      kubernetes.io/arch: amd64
+      team: devops
+      service: devops-infra
+      performance_type: standard
+  - name: update-environment
+    inputs:
+      parameters:
+      - name: version
+    volumes:
+    - name: aws-config
+      configMap:
+        name: aws-config
+        items:
+        - key: config
+          path: config
+    serviceAccountName: argo-workflow
+    container:
+      image: harbor.example.io/devops/aws-handler
+      env:
+      - name: AWS_PROFILE
+        value: example-dev
+      - name: AWS_DEFAULT_REGION
+        value: ap-northeast-2
+      command:
+      - "/bin/sh"
+      - "-c"
+      args:
+      - "
+        python3 -u /elasticbeanstalk/update_environment.py
+          --environment-name simple-server-dev
+          --version-label simple-server-dev-{{ inputs.parameters.version }}
+        "
+      activeDeadlineSeconds: 300
+      workingDir: /
+      resources:
+        requests:
+          memory: 128Mi
+          cpu: 50m
+      volumeMounts:
+      - name: aws-config
+        mountPath: /root/.aws/config
+        subPath: config
+    nodeSelector:
+      kubernetes.io/arch: amd64
+      team: devops
+      service: devops-infra
+      performance_type: standard

@@ -1,0 +1,44 @@
+apiVersion: argoproj.io/v1alpha1
+kind: CronWorkflow
+metadata:
+  name: simple-batch-execute
+spec:
+  schedule: "0 0 * * *"
+  workflowSpec:
+    entrypoint: execute
+    podGC:
+      strategy: OnPodCompletion
+    arguments:
+      parameters:
+      - name: environment
+        value: dev
+    templates:
+    - name: execute
+      inputs:
+        parameters:
+        - name: environment
+          value: '{{ workflow.parameters.environment }}'
+      serviceAccountName: argo-workflow
+      container:
+        image: harbor.example.io/devops/simple-batch:latest
+        imagePullPolicy: Always
+        args:
+        - "--spring.profiles.active={{ inputs.parameters.environment }}"
+        - "--spring.cloud.task.initialize-enabled=true"
+        - "--spring.cloud.task.name=simple-batch"
+        - "--spring.cloud.task.closecontext-enabled=true"
+        - "--spring.datasource.driverClassName=org.hsqldb.jdbcDriver"
+        - "--spring.datasource.url=jdbc:hsqldb:mem:db"
+        - "--spring.datasource.username=sa"
+        - "--spring.datasource.password="
+        - "--management.prometheus.metrics.export.pushgateway.enabled=true"
+        - "--management.prometheus.metrics.export.pushgateway.base-url=http://prometheus-pushgateway.observability:9091"
+        - "--management.zipkin.tracing.endpoint=http://opentelemetry-collector-headless.observability:9411/api/v2/spans"
+        envFrom:
+        - secretRef:
+            name: simple-batch
+    nodeSelector:
+      kubernetes.io/arch: amd64
+      team: devops
+      service: devops-infra
+      performance_type: standard

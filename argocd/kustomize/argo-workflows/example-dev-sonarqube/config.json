@@ -1,0 +1,4 @@
+{
+  "release_name": "argo-workflows-sonarqube",
+  "release_namespace": "development"
+}

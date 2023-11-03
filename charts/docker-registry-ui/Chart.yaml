@@ -1,0 +1,14 @@
+apiVersion: v2
+name: docker-registry-ui
+description: A Helm chart for deploying Docker Registry UI.
+type: application
+version: 0.0.1
+appVersion: 0.9.3
+home: https://github.com/Quiq/docker-registry-ui
+keywords:
+  - docker-registry-ui
+sources:
+  - https://github.com/Quiq/docker-registry-ui
+maintainers:
+  - name: kwangil77
+    email: kwangil77@hotmail.com

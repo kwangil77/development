@@ -1,0 +1,14 @@
+apiVersion: v2
+name: schema-registry
+description: A Helm chart for deploying Schema Registry.
+type: application
+version: 0.0.1
+appVersion: 1.0.0
+home: https://github.com/hortonworks/registry
+keywords:
+  - schema-registry
+sources:
+  - https://github.com/hortonworks/registry
+maintainers:
+  - name: kwangil77
+    email: kwangil77@hotmail.com

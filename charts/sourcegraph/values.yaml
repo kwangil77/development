@@ -1,0 +1,114 @@
+# Default values for sourcegraph.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+image:
+  repository: sourcegraph/server
+  # Overrides the image tag whose default is {{ .Chart.AppVersion }}
+  tag: ""
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+podAnnotations: {}
+
+podLabels: {}
+
+podSecurityContext: {}
+  # fsGroup: 1000
+
+securityContext: {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  # runAsUser: 1000
+
+priorityClassName: ""
+
+livenessProbe:
+  httpGet:
+    path: /healthz
+    port: http
+  initialDelaySeconds: 60
+  periodSeconds: 30
+  failureThreshold: 10
+  timeoutSeconds: 1
+
+readinessProbe:
+  httpGet:
+    path: /healthz
+    port: http
+  initialDelaySeconds: 60
+  periodSeconds: 30
+  failureThreshold: 10
+  timeoutSeconds: 1
+
+service:
+  type: ClusterIP
+  annotations: {}
+  port: 7080
+
+ingress:
+  enabled: false
+  annotations: {}
+  ingressClassName: ""
+  hosts: []
+  #   - sourcegraph.local
+  tls: []
+  #   - hosts:
+  #       - sourcegraph.local
+  #       - sourcegraph-docker.local
+  #       - sourcegraph-docker-hosted.local
+  #     secretName: sourcegraph-local-tls
+
+persistence:
+  enabled: false
+  annotations: {}
+  # existingClaim: existing-pvc
+  accessMode: ReadWriteOnce
+  storageClass: standard
+  size: 8Gi
+
+resources: {}
+# We usually recommend not to specify default resources and to leave this as a conscious
+# choice for the user. This also increases chances charts run on environments with little
+# resources, such as Minikube. If you do want to specify resources, uncomment the following
+# lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+#   limits:
+#     cpu: 100m
+#     memory: 128Mi
+#   requests:
+#     cpu: 100m
+#     memory: 128Mi
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+env: []
+#   - name: VARIABLE
+#     value: my-value
+
+psql: {}
+  # host: postgresdb.local
+  # port: 5432
+  # database: sourcegraph
+  # username: sourcegraph
+  # password:
+  #   secret: sourcegraph-postgres
+  #   key: password

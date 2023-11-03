@@ -1,0 +1,50 @@
+{{- if .Values.controller.ingress.enabled -}}
+{{- $apiIsStable := eq (include "ngrinder.controller.ingress.isStable" .) "true" -}}
+{{- $ingressSupportsPathType := eq (include "ngrinder.controller.ingress.supportsPathType" .) "true" -}}
+{{- $serviceName := include "ngrinder.controller.fullname" . -}}
+{{- $servicePort := .Values.controller.service.port -}}
+apiVersion: {{ include "ngrinder.controller.ingress.apiVersion" . }}
+kind: Ingress
+metadata:
+  name: {{ $serviceName }}
+  labels:
+    {{- include "ngrinder.controller.labels" . | nindent 4 }}
+  {{- with .Values.controller.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+{{- if and $apiIsStable .Values.controller.ingress.ingressClassName }}
+  ingressClassName: {{ .Values.controller.ingress.ingressClassName }}
+{{- end }}
+  rules:
+  {{- range .Values.controller.ingress.hosts }}
+    - host: {{ . | quote }}
+      http:
+        paths:
+          - path: /
+            {{- if $ingressSupportsPathType }}
+            pathType: Prefix
+            {{- end }}
+            backend:
+            {{- if $apiIsStable }}
+              service:
+                name: {{ $serviceName }}
+                port:
+                  name: http
+            {{- else }}
+              serviceName: {{ $serviceName }}
+              servicePort: http
+            {{- end }}
+  {{- end }}
+  {{- if .Values.controller.ingress.tls }}
+  tls:
+  {{- range .Values.controller.ingress.tls }}
+    - hosts:
+    {{- range .hosts }}
+        - {{ quote . }}
+    {{- end }}
+      secretName: {{ .secretName }}
+  {{- end }}
+  {{- end }}
+{{- end }}

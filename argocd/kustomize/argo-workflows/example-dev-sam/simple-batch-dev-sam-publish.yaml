@@ -1,0 +1,127 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: simple-batch-dev-sam-publish
+spec:
+  entrypoint: publish
+  podGC:
+    strategy: OnPodCompletion
+  arguments:
+    parameters:
+    - name: repo
+      value: https://github.com/kwangil77/deployment.git
+    - name: revision
+      value: main
+  templates:
+  - name: publish
+    steps:
+    - - name: package
+        template: package
+    - - name: deploy
+        template: deploy
+        arguments:
+          artifacts:
+          - name: template-file
+            from: "{{ steps.package.outputs.artifacts.template-file }}"
+  - name: package
+    inputs:
+      artifacts:
+      - name: source
+        path: /src
+        git:
+          repo: "{{ workflow.parameters.repo }}"
+          revision: "{{ workflow.parameters.revision }}"
+          usernameSecret:
+            name: bitbucket-secret
+            key: username
+          passwordSecret:
+            name: bitbucket-secret
+            key: password
+    outputs:
+      artifacts:
+      - name: template-file
+        path: /tmp/template.yaml
+    volumes:
+    - name: aws-config
+      configMap:
+        name: aws-config
+        items:
+        - key: config
+          path: config
+    serviceAccountName: argo-workflow
+    container:
+      image: public.ecr.aws/sam/build-provided.al2
+      env:
+      - name: AWS_PROFILE
+        value: example-dev
+      - name: AWS_DEFAULT_REGION
+        value: ap-northeast-2
+      command:
+      - "/bin/sh"
+      - "-c"
+      args:
+      - "
+        sam package
+          --template-file argo-workflows/lambda/simple-batch/simple-batch-dev/template.yaml
+          --output-template-file /tmp/template.yaml
+          --s3-bucket example-dev-devops-bucket
+          --s3-prefix application/simple-batch-dev-stack/{{ workflow.parameters.revision }}/{{ workflow.creationTimestamp.Y }}{{ workflow.creationTimestamp.m }}{{ workflow.creationTimestamp.d }}{{ workflow.creationTimestamp.H }}{{ workflow.creationTimestamp.M }}
+        "
+      workingDir: /src
+      resources:
+        requests:
+          memory: 128Mi
+          cpu: 50m
+      volumeMounts:
+      - name: aws-config
+        mountPath: /root/.aws/config
+        subPath: config
+    nodeSelector:
+      kubernetes.io/arch: amd64
+      team: devops
+      service: devops-infra
+      performance_type: standard
+  - name: deploy
+    inputs:
+      artifacts:
+      - name: template-file
+        path: /tmp/template.yaml
+    volumes:
+    - name: aws-config
+      configMap:
+        name: aws-config
+        items:
+        - key: config
+          path: config
+    serviceAccountName: argo-workflow
+    container:
+      image: public.ecr.aws/sam/build-provided.al2
+      env:
+      - name: AWS_PROFILE
+        value: example-dev
+      - name: AWS_DEFAULT_REGION
+        value: ap-northeast-2
+      command:
+      - "/bin/sh"
+      - "-c"
+      args:
+      - "
+        sam deploy
+          --stack-name simple-batch-dev-stack
+          --template-file /tmp/template.yaml
+          --capabilities CAPABILITY_IAM CAPABILITY_AUTO_EXPAND
+        "
+      workingDir: /src
+      resources:
+        requests:
+          memory: 128Mi
+          cpu: 50m
+      volumeMounts:
+      - name: aws-config
+        mountPath: /root/.aws/config
+        subPath: config
+    nodeSelector:
+      kubernetes.io/arch: amd64
+      team: devops
+      service: devops-infra
+      performance_type: standard

@@ -1,0 +1,62 @@
+library identifier: 'example-pipeline-library', changelog: false
+
+def timestamp = new Date().format("yyyy-MM-dd'T'HH:mm:ss.SSSZ")
+def version = timestamp.substring(0, 10).replace('-', '')
+
+def elasticsearchUrl = 'https://....ap-northeast-2.es.amazonaws.com'
+def indexPrefix = 'iamrole'
+def awsProfiles = [
+    'example-dev'
+]
+publishBasePipeline slackChannels: ['#devops_alert'], containers: [], {
+    currentBuild.displayName = "#${version}"
+
+    stage('Checkout') {
+        deleteDir()
+        checkout scm
+    }
+    stage('Prepare reports') {
+        httpRequest httpMode: 'DELETE', validResponseCodes: '100:599', url: "${elasticsearchUrl}/${indexPrefix}-${version}"
+        clusters = []
+
+        withAWS([region: 'ap-northeast-2']) {
+            awsProfiles.each { profile ->
+                output = sh returnStdout: true, script: """
+                    export AWS_PROFILE=${profile} && \
+                    aws iam list-roles
+                """
+                response = readJSON text: output
+
+                response.Roles.each { role ->
+                    resource = [
+                        IsTruncated: true,
+                        Tags: []
+                    ]
+                    try {
+                        output = sh returnStdout: true, script: """
+                            export AWS_PROFILE=${profile} && \
+                            aws iam list-role-tags \
+                                --role-name ${role.RoleName}
+                        """
+                        resource = readJSON text: output
+                    } catch (e) {}
+
+                    clusters << ([
+                        '@timestamp': timestamp,
+                        Account: profile
+                    ] << [
+                        Tags: resource.Tags.collectEntries { [it.Key, it.Value] },
+                        IsTruncated: resource.IsTruncated
+                    ] << role)
+                }
+            }
+        }
+        writeFile file: "${indexPrefix}-${version}.json", text: clusters.collect { '{"index":{}}\n' + groovy.json.JsonOutput.toJson(it) + '\n' }.join('')
+
+        archiveArtifacts artifacts: "${indexPrefix}-${version}.json", onlyIfSuccessful: true
+    }
+    stage('Publish reports') {
+        data = readFile "${indexPrefix}-${version}.json"
+        httpRequest acceptType: 'APPLICATION_JSON', contentType: 'APPLICATION_JSON', httpMode: 'POST', requestBody: data, url: "${elasticsearchUrl}/${indexPrefix}-${version}/_bulk"
+    }
+}

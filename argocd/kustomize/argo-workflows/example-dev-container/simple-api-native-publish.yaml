@@ -1,0 +1,110 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: simple-api-native-publish
+spec:
+  entrypoint: publish
+  podGC:
+    strategy: OnPodCompletion
+  arguments:
+    parameters:
+    - name: repo
+      value: https://github.com/kwangil77/simple.git
+    - name: revision
+      value: feature/graalvm_native_image
+  templates:
+  - name: publish
+    steps:
+    - - name: execute
+        template: execute
+  - name: execute
+    inputs:
+      artifacts:
+      - name: source
+        path: /src
+        git:
+          repo: "{{ workflow.parameters.repo }}"
+          revision: "{{ workflow.parameters.revision }}"
+          usernameSecret:
+            name: bitbucket-secret
+            key: username
+          passwordSecret:
+            name: bitbucket-secret
+            key: password
+    serviceAccountName: argo-workflow
+    container:
+      image: harbor.example.io/docker.io/library/eclipse-temurin:17-jammy
+      env:
+      - name: POD_IP
+        valueFrom:
+          fieldRef:
+            fieldPath: status.podIP
+      - name: DOCKER_USERNAME
+        valueFrom:
+          secretKeyRef:
+            name: docker-secret
+            key: username
+      - name: DOCKER_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: docker-secret
+            key: password
+      command:
+      - "/bin/sh"
+      - "-c"
+      args:
+      - "
+        export DOCKER_HOST=tcp://${POD_IP}:2375
+        && ./gradlew clean flywayMigrate :simple-api:bootBuildImage --console=plain
+          -Dflyway.url=jdbc:mariadb://127.0.0.1:3306/simple?allowPublicKeyRetrieval=true\\&useSSL=false
+          --imageName=harbor.example.io/devops/simple-api:native-image --publishImage
+          -PdeployUsername=${DOCKER_USERNAME}
+          -PdeployPassword=${DOCKER_PASSWORD}
+        "
+      workingDir: /src
+      resources:
+        requests:
+          memory: 2048Mi
+          cpu: 2000m
+    sidecars:
+    - name: dind
+      image: harbor.example.io/docker.io/library/docker:dind
+      imagePullPolicy: Always
+      env:
+      - name: DOCKER_TLS_CERTDIR
+        value: ''
+      securityContext:
+        privileged: true
+      command:
+      - "dockerd-entrypoint.sh"
+    - name: mysql
+      image: harbor.example.io/docker.io/library/mysql:8
+      env:
+      - name: MYSQL_ALLOW_EMPTY_PASSWORD
+        value: 'true'
+      - name: MYSQL_DATABASE
+        value: simple
+      command:
+      - "docker-entrypoint.sh"
+      - "mysqld"
+      readinessProbe:
+        exec:
+          command:
+          - "/bin/bash"
+          - "-ec"
+          - "mysqladmin status -uroot"
+        initialDelaySeconds: 5
+        periodSeconds: 10
+        timeoutSeconds: 1
+        failureThreshold: 3
+        successThreshold: 1
+    nodeSelector:
+      kubernetes.io/arch: amd64
+      team: devops
+      service: devops-infra
+      performance_type: memory
+    tolerations:
+    - key: performance_type
+      operator: Equal
+      value: mem
+      effect: NoSchedule

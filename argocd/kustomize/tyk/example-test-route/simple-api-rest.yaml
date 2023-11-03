@@ -1,0 +1,24 @@
+apiVersion: tyk.tyk.io/v1alpha1
+kind: ApiDefinition
+metadata:
+  name: simple-api-rest
+spec:
+  contextRef:
+    name: tyk
+    namespace: management
+  name: simple-api-rest
+  api_id: simple-api-rest
+  protocol: http
+  use_keyless: true
+  active: true
+  proxy:
+    target_url: http://simple-api.simple:8080
+    listen_path: /simple-api/
+    strip_listen_path: true
+  version_data:
+    default_version: Default
+    not_versioned: true
+    versions:
+      Default:
+        name: Default
+        use_extended_paths: true

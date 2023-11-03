@@ -1,0 +1,23 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- aws-handler-publish.yaml
+- awx-ee-publish.yaml
+- backstage-publish.yaml
+- db-migrator-publish.yaml
+- docker-publish.yaml
+- helm-publish.yaml
+- k8s-publish.yaml
+- schema-registry-publish.yaml
+- simple-api-native-publish.yaml
+- simple-api-publish.yaml
+- simple-batch-native-publish.yaml
+- simple-batch-publish.yaml
+- simple-client-native-publish.yaml
+- simple-client-publish.yaml
+- simple-server-native-publish.yaml
+- simple-server-publish.yaml
+- simple-web-publish.yaml
+- slack-handler-publish.yaml
+- sourcegraph-publish.yaml
+- techdocs-publish.yaml

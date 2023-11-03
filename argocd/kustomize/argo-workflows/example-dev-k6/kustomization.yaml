@@ -1,0 +1,7 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- simple-api-rest-k6-execute.yaml
+- simple-api-grpc-k6-execute.yaml
+- simple-server-rest-k6-execute.yaml
+- simple-server-grpc-k6-execute.yaml

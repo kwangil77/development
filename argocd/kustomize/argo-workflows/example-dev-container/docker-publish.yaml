@@ -1,0 +1,67 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: docker-publish
+spec:
+  entrypoint: publish
+  podGC:
+    strategy: OnPodCompletion
+  arguments:
+    parameters:
+    - name: repo
+      value: https://github.com/kwangil77/development.git
+    - name: revision
+      value: main
+  templates:
+  - name: publish
+    steps:
+    - - name: execute
+        template: execute
+  - name: execute
+    inputs:
+      artifacts:
+      - name: source
+        path: /src
+        git:
+          repo: "{{ workflow.parameters.repo }}"
+          revision: "{{ workflow.parameters.revision }}"
+          usernameSecret:
+            name: bitbucket-secret
+            key: username
+          passwordSecret:
+            name: bitbucket-secret
+            key: password
+    volumes:
+    - name: docker-config
+      secret:
+        secretName: docker-config
+        items:
+        - key: config.json
+          path: config.json
+    serviceAccountName: argo-workflow
+    container:
+      image: gcr.io/kaniko-project/executor:debug
+      command:
+      - "/busybox/sh"
+      - "-c"
+      args:
+      - "
+        /kaniko/executor --log-format=text
+          --context=/src/docker/docker
+          --dockerfile=/src/docker/docker/Dockerfile
+          --destination=harbor.example.io/devops/docker:latest
+        "
+      workingDir: /src
+      resources:
+        requests:
+          memory: 1024Mi
+          cpu: 1000m
+      volumeMounts:
+      - name: docker-config
+        mountPath: /kaniko/.docker/config.json
+        subPath: config.json
+    nodeSelector:
+      kubernetes.io/arch: amd64
+      team: devops
+      service: devops-infra
+      performance_type: standard

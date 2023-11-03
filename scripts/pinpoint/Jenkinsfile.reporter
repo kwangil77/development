@@ -1,0 +1,66 @@
+library identifier: 'example-pipeline-library', changelog: false
+
+def timestamp = new Date().format("yyyy-MM-dd'T'HH:mm:ss.SSSZ")
+def version = timestamp.substring(0, 10).replace('-', '')
+
+def pinpointUrl = 'https://apm.prod.example.io'
+def elasticsearchUrl = 'https://....ap-northeast-2.es.amazonaws.com'
+def indexPrefix = 'pinpoint_agents'
+
+publishBasePipeline slackChannels: ['#devops_alert'], containers: [], {
+    currentBuild.displayName = "#${version}"
+
+    stage('Checkout') {
+        deleteDir()
+        checkout scm
+    }
+    stage('Prepare reports') {
+        httpRequest httpMode: 'DELETE', validResponseCodes: '100:599', url: "${elasticsearchUrl}/${indexPrefix}-${version}"
+        agents = []
+
+        response = httpRequest url: "${pinpointUrl}/applications.pinpoint"
+        applications = readJSON text: response.content
+
+        applications.each {
+            // response = httpRequest url: "${pinpointUrl}/getAgentList.pinpoint?application=${it.applicationName}"
+            // agentList = readJSON text: response.content
+            
+            // if (agentList) {
+            //     agent = [
+            //         '@timestamp': timestamp
+            //     ] << agentList.collect { it.value }.flatten().max { it.status.eventTimestamp }
+
+            //     if (agent.serverMetaData == null) {
+            //         agent.serverMetaData = [:]
+            //     }
+            //     if (agent.jvmInfo == null) {
+            //         agent.jvmInfo = [:]
+            //     }
+            //     agents << agent
+            // }
+            output = sh returnStdout: true, script: """
+                curl -sq '${pinpointUrl}/getAgentList.pinpoint?application=${it.applicationName}' | jq -s '.[]|flatten|max_by(.status.eventTimestamp)//empty|with_entries(select(.value!=null))'
+            """
+            if (output) {
+                agent = [
+                    '@timestamp': timestamp
+                ] << readJSON([text: output])
+
+                if (agent.serverMetaData == null) {
+                    agent.serverMetaData = [:]
+                }
+                if (agent.jvmInfo == null) {
+                    agent.jvmInfo = [:]
+                }
+                agents << agent
+            }
+        }
+        writeFile file: "${indexPrefix}-${version}.json", text: agents.collect { '{"index":{}}\n' + groovy.json.JsonOutput.toJson(it) + '\n' }.join('')
+
+        archiveArtifacts artifacts: "${indexPrefix}-${version}.json", onlyIfSuccessful: true
+    }
+    stage('Publish reports') {
+        data = readFile "${indexPrefix}-${version}.json"
+        httpRequest acceptType: 'APPLICATION_JSON', contentType: 'APPLICATION_JSON', httpMode: 'POST', requestBody: data, url: "${elasticsearchUrl}/${indexPrefix}-${version}/_bulk"
+    }
+}

@@ -1,0 +1,7 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- amazon-mq-create.yaml
+- documentdb-create.yaml
+- ec2-instance-create.yaml
+- elasticbeanstalk-create.yaml

@@ -1,0 +1,32 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: argo-workflow
+rules:
+- verbs:
+  - create
+  - delete
+  - get
+  apiGroups:
+  - k6.io
+  resources:
+  - k6s
+- verbs:
+  - list
+  - watch
+  apiGroups:
+  - ""
+  resources:
+  - pods
+- verbs:
+  - get
+  apiGroups:
+  - argoproj.io
+  resources:
+  - workflowtemplates
+- verbs:
+  - create
+  apiGroups:
+  - argoproj.io
+  resources:
+  - workflows

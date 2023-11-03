@@ -1,0 +1,14 @@
+apiVersion: v2
+name: base-app
+description: A Helm chart for deploying Base App.
+type: application
+version: 0.0.3
+appVersion: 0.0.1
+home: https://github.com/kwangil77/development
+keywords:
+  - base-app
+sources:
+  - https://github.com/kwangil77/development
+maintainers:
+  - name: kwangil77
+    email: kwangil77@hotmail.com

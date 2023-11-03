@@ -1,0 +1,71 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: backstage-code-analysis
+spec:
+  entrypoint: analysis
+  podGC:
+    strategy: OnPodCompletion
+  arguments:
+    parameters:
+    - name: repo
+      value: https://github.com/kwangil77/backstage.git
+    - name: revision
+      value: main
+  templates:
+  - name: analysis
+    steps:
+    - - name: execute
+        template: execute
+  - name: execute
+    inputs:
+      artifacts:
+      - name: source
+        path: /src
+        git:
+          repo: "{{ workflow.parameters.repo }}"
+          revision: "{{ workflow.parameters.revision }}"
+          usernameSecret:
+            name: bitbucket-secret
+            key: username
+          passwordSecret:
+            name: bitbucket-secret
+            key: password
+    serviceAccountName: argo-workflow
+    container:
+      image: harbor.example.io/docker.io/library/node:20-bookworm
+      env:
+      - name: SONAR_HOST_URL
+        valueFrom:
+          secretKeyRef:
+            name: sonarqube-secret
+            key: host.url
+      - name: SONAR_TOKEN
+        valueFrom:
+          secretKeyRef:
+            name: sonarqube-secret
+            key: token
+      command:
+      - "/bin/sh"
+      - "-c"
+      args:
+      - "
+        yarn global add sonarqube-scanner
+        && sonar-scanner -Dsonar.host.url=${SONAR_HOST_URL}
+          -Dsonar.token=${SONAR_TOKEN}
+          -Dsonar.links.homepage={{ workflow.parameters.repo }}
+          -Dsonar.links.scm={{ workflow.parameters.repo }}
+          -Dsonar.projectKey=com.example:backstage
+          -Dsonar.projectName=backstage
+          -Dsonar.exclusions=node_modules/**,dist/*
+        "
+      workingDir: /src
+      resources:
+        requests:
+          memory: 2048Mi
+          cpu: 2000m
+    nodeSelector:
+      kubernetes.io/arch: amd64
+      team: devops
+      service: devops-infra
+      performance_type: standard

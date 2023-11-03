@@ -1,0 +1,67 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: schema-registry-helm-publish
+spec:
+  entrypoint: publish
+  podGC:
+    strategy: OnPodCompletion
+  arguments:
+    parameters:
+    - name: repo
+      value: https://github.com/kwangil77/development.git
+    - name: revision
+      value: main
+  templates:
+  - name: publish
+    steps:
+    - - name: helm-push
+        template: helm-push
+  - name: helm-push
+    inputs:
+      artifacts:
+      - name: source
+        path: /src
+        git:
+          repo: "{{ workflow.parameters.repo }}"
+          revision: "{{ workflow.parameters.revision }}"
+          usernameSecret:
+            name: bitbucket-secret
+            key: username
+          passwordSecret:
+            name: bitbucket-secret
+            key: password
+    serviceAccountName: argo-workflow
+    container:
+      image: harbor.example.io/docker.io/alpine/helm
+      env:
+      - name: NEXUS_USERNAME
+        valueFrom:
+          secretKeyRef:
+            name: nexus-secret
+            key: username
+      - name: NEXUS_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: nexus-secret
+            key: password
+      command:
+      - "/bin/bash"
+      - "-c"
+      args:
+      - "
+        helm repo remove example || true
+        && helm repo add example https://nexus.example.io/repository/helm-hosted || true
+        && helm plugin install --version master https://github.com/sonatype-nexus-community/helm-nexus-push.git || true
+        && helm nexus-push example charts/schema-registry --username ${NEXUS_USERNAME} --password ${NEXUS_PASSWORD}
+        "
+      workingDir: /src
+      resources:
+        requests:
+          memory: 1024Mi
+          cpu: 1000m
+    nodeSelector:
+      kubernetes.io/arch: amd64
+      team: devops
+      service: devops-infra
+      performance_type: standard

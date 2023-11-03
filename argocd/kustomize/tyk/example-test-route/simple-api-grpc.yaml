@@ -1,0 +1,24 @@
+apiVersion: tyk.tyk.io/v1alpha1
+kind: ApiDefinition
+metadata:
+  name: simple-api-grpc
+spec:
+  contextRef:
+    name: tyk
+    namespace: management
+  name: simple-api-grpc
+  api_id: simple-api-grpc
+  protocol: http
+  use_keyless: true
+  active: true
+  proxy:
+    target_url: h2c://simple-api-grpc.simple:9090
+    listen_path: /main.User
+    strip_listen_path: false
+  version_data:
+    default_version: Default
+    not_versioned: true
+    versions:
+      Default:
+        name: Default
+        use_extended_paths: true
