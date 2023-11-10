@@ -1,4 +1,4 @@
-FROM harbor.example.io/docker.io/jenkins/jnlp-slave:latest-jdk11
+FROM docker.io/jenkins/jnlp-slave:latest-jdk11
 LABEL maintainer="Kwangil Ha <kwangil77@hotmail.com>"
 USER root
 RUN apt update \

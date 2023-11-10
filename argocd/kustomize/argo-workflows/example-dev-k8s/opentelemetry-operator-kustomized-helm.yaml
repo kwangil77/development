@@ -32,10 +32,10 @@ spec:
           repo: "{{ workflow.parameters.repo }}"
           revision: "{{ workflow.parameters.revision }}"
           usernameSecret:
-            name: bitbucket-secret
+            name: github-secret
             key: username
           passwordSecret:
-            name: bitbucket-secret
+            name: github-secret
             key: password
     volumes:
     - name: kube-config
@@ -46,7 +46,7 @@ spec:
           path: config
     serviceAccountName: argo-workflow
     container:
-      image: harbor.example.io/devops/k8s
+      image: ghcr.io/kwangil77/k8s
       env:
       - name: HELM_CACHE_HOME
         value: /tmp

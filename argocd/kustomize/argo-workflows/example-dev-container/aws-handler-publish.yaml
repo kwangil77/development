@@ -26,10 +26,10 @@ spec:
           repo: "{{ workflow.parameters.repo }}"
           revision: "{{ workflow.parameters.revision }}"
           usernameSecret:
-            name: bitbucket-secret
+            name: github-secret
             key: username
           passwordSecret:
-            name: bitbucket-secret
+            name: github-secret
             key: password
     volumes:
     - name: docker-config
@@ -49,7 +49,7 @@ spec:
         /kaniko/executor --log-format=text
           --context=/src/docker/aws-handler
           --dockerfile=/src/docker/aws-handler/Dockerfile
-          --destination=harbor.example.io/devops/aws-handler:latest
+          --destination=ghcr.io/kwangil77/aws-handler:latest
         "
       workingDir: /src
       resources:

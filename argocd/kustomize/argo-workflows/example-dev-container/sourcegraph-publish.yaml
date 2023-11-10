@@ -34,7 +34,7 @@ spec:
           path: config.json
     serviceAccountName: argo-workflow
     container:
-      image: harbor.example.io/docker.io/library/golang:1.19
+      image: docker.io/library/golang:1.19
       env:
       - name: DOCKER_HOST
         value: 127.0.0.1
@@ -48,10 +48,10 @@ spec:
         && npm install -g gulp pnpm@7.31.0
         && curl -fsSL https://get.docker.com/ | sh
         && bash cmd/server/pre-build.sh
-        && IMAGE=harbor.example.io/devops/sourcegraph:5.0.6 VERSION=5.0.6 bash cmd/server/build.sh github.com/sourcegraph/sourcegraph/cmd/frontend github.com/sourcegraph/sourcegraph/cmd/worker github.com/sourcegraph/sourcegraph/cmd/repo-updater github.com/sourcegraph/sourcegraph/cmd/symbols github.com/sourcegraph/sourcegraph/cmd/migrator
-        && docker push harbor.example.io/devops/sourcegraph:5.0.6
-        && docker tag harbor.example.io/devops/sourcegraph:5.0.6 harbor.example.io/devops/sourcegraph:latest
-        && docker push harbor.example.io/devops/sourcegraph:latest
+        && IMAGE=ghcr.io/kwangil77/sourcegraph:5.0.6 VERSION=5.0.6 bash cmd/server/build.sh github.com/sourcegraph/sourcegraph/cmd/frontend github.com/sourcegraph/sourcegraph/cmd/worker github.com/sourcegraph/sourcegraph/cmd/repo-updater github.com/sourcegraph/sourcegraph/cmd/symbols github.com/sourcegraph/sourcegraph/cmd/migrator
+        && docker push ghcr.io/kwangil77/sourcegraph:5.0.6
+        && docker tag ghcr.io/kwangil77/sourcegraph:5.0.6 ghcr.io/kwangil77/sourcegraph:latest
+        && docker push ghcr.io/kwangil77/sourcegraph:latest
         "
       workingDir: /src
       resources:
@@ -64,7 +64,7 @@ spec:
         subPath: config.json
     sidecars:
     - name: dind
-      image: harbor.example.io/docker.io/library/docker:dind
+      image: docker.io/library/docker:dind
       imagePullPolicy: Always
       env:
       - name: DOCKER_TLS_CERTDIR

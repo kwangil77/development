@@ -26,14 +26,14 @@ spec:
           repo: "{{ workflow.parameters.repo }}"
           revision: "{{ workflow.parameters.revision }}"
           usernameSecret:
-            name: bitbucket-secret
+            name: github-secret
             key: username
           passwordSecret:
-            name: bitbucket-secret
+            name: github-secret
             key: password
     serviceAccountName: argo-workflow
     container:
-      image: harbor.example.io/docker.io/library/node:20-bookworm
+      image: docker.io/library/node:20-bookworm
       env:
       - name: SONAR_HOST_URL
         valueFrom:

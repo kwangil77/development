@@ -1,4 +1,4 @@
-FROM harbor.example.io/docker.io/artifacthub/db-migrator
+FROM docker.io/artifacthub/db-migrator
 LABEL maintainer="Kwangil Ha <kwangil77@hotmail.com>"
 USER root
 RUN sed -ri 's/create extension tsm_system_rows/create extension if not exists tsm_system_rows/' schema/024_tsm_system_rows_extension.sql \

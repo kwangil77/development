@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
-  name: sourcegraph-helm-publish
+  name: aws-ecr-proxy-helm-publish
 spec:
   entrypoint: publish
   podGC:
@@ -26,14 +26,14 @@ spec:
           repo: "{{ workflow.parameters.repo }}"
           revision: "{{ workflow.parameters.revision }}"
           usernameSecret:
-            name: bitbucket-secret
+            name: github-secret
             key: username
           passwordSecret:
-            name: bitbucket-secret
+            name: github-secret
             key: password
     serviceAccountName: argo-workflow
     container:
-      image: harbor.example.io/docker.io/alpine/helm
+      image: docker.io/alpine/helm
       env:
       - name: NEXUS_USERNAME
         valueFrom:
@@ -53,7 +53,7 @@ spec:
         helm repo remove example || true
         && helm repo add example https://nexus.example.io/repository/helm-hosted || true
         && helm plugin install --version master https://github.com/sonatype-nexus-community/helm-nexus-push.git || true
-        && helm nexus-push example charts/sourcegraph --username ${NEXUS_USERNAME} --password ${NEXUS_PASSWORD}
+        && helm nexus-push example charts/aws-ecr-proxy --username ${NEXUS_USERNAME} --password ${NEXUS_PASSWORD}
         "
       workingDir: /src
       resources:

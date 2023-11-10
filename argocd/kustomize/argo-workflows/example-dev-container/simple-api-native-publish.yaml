@@ -26,14 +26,14 @@ spec:
           repo: "{{ workflow.parameters.repo }}"
           revision: "{{ workflow.parameters.revision }}"
           usernameSecret:
-            name: bitbucket-secret
+            name: github-secret
             key: username
           passwordSecret:
-            name: bitbucket-secret
+            name: github-secret
             key: password
     serviceAccountName: argo-workflow
     container:
-      image: harbor.example.io/docker.io/library/eclipse-temurin:17-jammy
+      image: docker.io/library/eclipse-temurin:17-jammy
       env:
       - name: POD_IP
         valueFrom:
@@ -57,7 +57,7 @@ spec:
         export DOCKER_HOST=tcp://${POD_IP}:2375
         && ./gradlew clean flywayMigrate :simple-api:bootBuildImage --console=plain
           -Dflyway.url=jdbc:mariadb://127.0.0.1:3306/simple?allowPublicKeyRetrieval=true\\&useSSL=false
-          --imageName=harbor.example.io/devops/simple-api:native-image --publishImage
+          --imageName=ghcr.io/kwangil77/simple-api:native-image --publishImage
           -PdeployUsername=${DOCKER_USERNAME}
           -PdeployPassword=${DOCKER_PASSWORD}
         "
@@ -68,7 +68,7 @@ spec:
           cpu: 2000m
     sidecars:
     - name: dind
-      image: harbor.example.io/docker.io/library/docker:dind
+      image: docker.io/library/docker:dind
       imagePullPolicy: Always
       env:
       - name: DOCKER_TLS_CERTDIR
@@ -78,7 +78,7 @@ spec:
       command:
       - "dockerd-entrypoint.sh"
     - name: mysql
-      image: harbor.example.io/docker.io/library/mysql:8
+      image: docker.io/library/mysql:8
       env:
       - name: MYSQL_ALLOW_EMPTY_PASSWORD
         value: 'true'

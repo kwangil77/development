@@ -20,7 +20,7 @@ spec:
           value: '{{ workflow.parameters.environment }}'
       serviceAccountName: argo-workflow
       container:
-        image: harbor.example.io/devops/simple-batch:latest
+        image: ghcr.io/kwangil77/simple-batch:latest
         imagePullPolicy: Always
         args:
         - "--spring.profiles.active={{ inputs.parameters.environment }}"

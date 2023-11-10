@@ -1,4 +1,4 @@
-FROM harbor.example.io/docker.io/library/python:3.11-alpine
+FROM docker.io/library/python:3.11-alpine
 WORKDIR /
 COPY requirements.txt /
 COPY send_message.py /

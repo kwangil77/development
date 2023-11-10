@@ -34,10 +34,10 @@ spec:
           path: config.json
     serviceAccountName: argo-workflow
     container:
-      image: harbor.example.io/docker.io/library/openjdk:8
+      image: docker.io/library/openjdk:8
       env:
       - name: GRADLE_OPTS
-        value: -Djib.to.image=harbor.example.io/devops/schema-registry -Djib.to.tags=latest,1.0.0
+        value: -Djib.to.image=ghcr.io/kwangil77/schema-registry -Djib.to.tags=latest,1.0.0
       command:
       - "/bin/bash"
       - "-c"

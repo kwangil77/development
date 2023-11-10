@@ -26,10 +26,10 @@ spec:
           repo: "{{ workflow.parameters.repo }}"
           revision: "{{ workflow.parameters.revision }}"
           usernameSecret:
-            name: bitbucket-secret
+            name: github-secret
             key: username
           passwordSecret:
-            name: bitbucket-secret
+            name: github-secret
             key: password
     volumes:
     - name: docker-config
@@ -55,8 +55,8 @@ spec:
           --context=/src
           --dockerfile=/src/simple-api/Dockerfile
           --build-arg=DB_HOST=${POD_IP}
-          --destination=harbor.example.io/devops/simple-api:latest
-          --destination=harbor.example.io/devops/simple-api:{{ workflow.creationTimestamp.Y }}{{ workflow.creationTimestamp.m }}{{ workflow.creationTimestamp.d }}{{ workflow.creationTimestamp.H }}{{ workflow.creationTimestamp.M }}
+          --destination=ghcr.io/kwangil77/simple-api:latest
+          --destination=ghcr.io/kwangil77/simple-api:{{ workflow.creationTimestamp.Y }}{{ workflow.creationTimestamp.m }}{{ workflow.creationTimestamp.d }}{{ workflow.creationTimestamp.H }}{{ workflow.creationTimestamp.M }}
         "
       workingDir: /src
       resources:
@@ -69,7 +69,7 @@ spec:
         subPath: config.json
     sidecars:
     - name: mysql
-      image: harbor.example.io/docker.io/library/mysql:8
+      image: docker.io/library/mysql:8
       env:
       - name: MYSQL_ALLOW_EMPTY_PASSWORD
         value: 'true'

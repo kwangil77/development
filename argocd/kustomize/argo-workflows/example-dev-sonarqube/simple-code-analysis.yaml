@@ -26,14 +26,14 @@ spec:
           repo: "{{ workflow.parameters.repo }}"
           revision: "{{ workflow.parameters.revision }}"
           usernameSecret:
-            name: bitbucket-secret
+            name: github-secret
             key: username
           passwordSecret:
-            name: bitbucket-secret
+            name: github-secret
             key: password
     serviceAccountName: argo-workflow
     container:
-      image: harbor.example.io/docker.io/library/eclipse-temurin:17-jammy
+      image: docker.io/library/eclipse-temurin:17-jammy
       env:
       - name: GRADLE_OPTS
         value: --add-opens=java.prefs/java.util.prefs=ALL-UNNAMED
@@ -66,7 +66,7 @@ spec:
           cpu: 2000m
     sidecars:
     - name: mysql
-      image: harbor.example.io/docker.io/library/mysql:8
+      image: docker.io/library/mysql:8
       env:
       - name: MYSQL_ALLOW_EMPTY_PASSWORD
         value: 'true'

@@ -73,10 +73,10 @@ spec:
           repo: "{{ workflow.parameters.repo }}"
           revision: "{{ workflow.parameters.revision }}"
           usernameSecret:
-            name: bitbucket-secret
+            name: github-secret
             key: username
           passwordSecret:
-            name: bitbucket-secret
+            name: github-secret
             key: password
     volumes:
     - name: aws-config
@@ -93,7 +93,7 @@ spec:
           path: config.pg.tfbackend
     serviceAccountName: argo-workflow
     container:
-      image: harbor.example.io/docker.io/hashicorp/terraform
+      image: docker.io/hashicorp/terraform
       env:
       - name: AWS_PROFILE
         value: "{{ workflow.parameters.aws-profile }}"

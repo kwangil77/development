@@ -1,4 +1,4 @@
-FROM harbor.example.io/docker.io/jenkins/ssh-slave:latest-jdk11
+FROM docker.io/jenkins/ssh-slave:latest-jdk11
 LABEL maintainer="Kwangil Ha <kwangil77@hotmail.com>"
 RUN apt update \
     && apt -y install locales sudo zip jq libicu63 \

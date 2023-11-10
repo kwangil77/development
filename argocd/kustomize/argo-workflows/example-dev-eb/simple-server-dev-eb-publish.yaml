@@ -32,10 +32,10 @@ spec:
           repo: "{{ workflow.parameters.repo }}"
           revision: "{{ workflow.parameters.revision }}"
           usernameSecret:
-            name: bitbucket-secret
+            name: github-secret
             key: username
           passwordSecret:
-            name: bitbucket-secret
+            name: github-secret
             key: password
       parameters:
       - name: version
@@ -101,7 +101,7 @@ spec:
           path: config
     serviceAccountName: argo-workflow
     container:
-      image: harbor.example.io/devops/aws-handler
+      image: ghcr.io/kwangil77/aws-handler
       env:
       - name: AWS_PROFILE
         value: example-dev

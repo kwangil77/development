@@ -26,10 +26,10 @@ spec:
           repo: "{{ workflow.parameters.repo }}"
           revision: "{{ workflow.parameters.revision }}"
           usernameSecret:
-            name: bitbucket-secret
+            name: github-secret
             key: username
           passwordSecret:
-            name: bitbucket-secret
+            name: github-secret
             key: password
     volumes:
     - name: docker-config
@@ -49,8 +49,8 @@ spec:
         /kaniko/executor --log-format=text
           --context=/src/k8s/docker
           --dockerfile=/src/docker/k8s/Dockerfile
-          --destination=harbor.example.io/devops/k8s:latest
-          --destination=harbor.example.io/devops/k8s:1.27.1
+          --destination=ghcr.io/kwangil77/k8s:latest
+          --destination=ghcr.io/kwangil77/k8s:1.27.1
         "
       workingDir: /src
       resources:

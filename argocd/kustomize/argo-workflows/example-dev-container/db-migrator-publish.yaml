@@ -26,10 +26,10 @@ spec:
           repo: "{{ workflow.parameters.repo }}"
           revision: "{{ workflow.parameters.revision }}"
           usernameSecret:
-            name: bitbucket-secret
+            name: github-secret
             key: username
           passwordSecret:
-            name: bitbucket-secret
+            name: github-secret
             key: password
     volumes:
     - name: docker-config
@@ -49,8 +49,8 @@ spec:
         /kaniko/executor --log-format=text
           --context=/src/docker/db-migrator
           --dockerfile=/src/docker/db-migrator/Dockerfile
-          --destination=harbor.example.io/devops/db-migrator:latest
-          --destination=harbor.example.io/devops/db-migrator:v1.16.0
+          --destination=ghcr.io/kwangil77/db-migrator:latest
+          --destination=ghcr.io/kwangil77/db-migrator:v1.16.0
         "
       workingDir: /src
       resources:
