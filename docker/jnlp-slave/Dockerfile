@@ -4,7 +4,7 @@ USER root
 RUN apt update \
     && apt -y install locales sudo zip jq libicu63 \
     && localedef -c -i en_US -f UTF-8 en_US.UTF-8 \
-    && curl -sSL -o /tmp/docker.tgz https://download.docker.com/linux/static/stable/x86_64/docker-24.0.2.tgz \
+    && curl -sSL -o /tmp/docker.tgz https://download.docker.com/linux/static/stable/x86_64/docker-25.0.3.tgz \
     && tar xvzf /tmp/docker.tgz -C /tmp \
     && mv /tmp/docker/docker /usr/local/bin/docker \
     && rm -rf /tmp/docker* \
@@ -18,7 +18,7 @@ RUN apt update \
     && rm -rf /tmp/sam* \
     && curl -sSL -o /usr/local/bin/cyclonedx https://github.com/CycloneDX/cyclonedx-cli/releases/latest/download/cyclonedx-linux-x64 \
     && chmod +x /usr/local/bin/cyclonedx \
-    && curl -sSL -o /usr/local/bin/aws-iam-authenticator https://github.com/kubernetes-sigs/aws-iam-authenticator/releases/download/v0.6.2/aws-iam-authenticator_0.6.2_linux_amd64 \
+    && curl -sSL -o /usr/local/bin/aws-iam-authenticator https://github.com/kubernetes-sigs/aws-iam-authenticator/releases/download/v0.6.14/aws-iam-authenticator_0.6.14_linux_amd64 \
     && chmod +x /usr/local/bin/aws-iam-authenticator \
     && curl -sSL -o /usr/local/bin/kubectl https://dl.k8s.io/release/v1.27.3/bin/linux/amd64/kubectl \
     && chmod +x /usr/local/bin/kubectl \
