@@ -1,0 +1,82 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: kiali-operator-kustomized-helm
+spec:
+  entrypoint: publish
+  podGC:
+    strategy: OnPodCompletion
+  arguments:
+    parameters:
+    - name: repo
+      value: https://github.com/kwangil77/deployment.git
+    - name: revision
+      value: main
+    - name: path
+      value: argo-workflows/kustomized-helm/kiali-operator/example-dev
+    - name: context
+      value: arn:aws:eks:ap-northeast-2:...
+    - name: namespace
+      value: observability
+  templates:
+  - name: publish
+    steps:
+    - - name: kustomized-helm
+        template: kustomized-helm
+  - name: kustomized-helm
+    inputs:
+      artifacts:
+      - name: source
+        path: /src
+        git:
+          repo: "{{ workflow.parameters.repo }}"
+          revision: "{{ workflow.parameters.revision }}"
+          usernameSecret:
+            name: github-secret
+            key: username
+          passwordSecret:
+            name: github-secret
+            key: password
+    volumes:
+    - name: kube-config
+      configMap:
+        name: kube-config
+        items:
+        - key: config
+          path: config
+    serviceAccountName: argo-workflow
+    container:
+      image: ghcr.io/kwangil77/k8s
+      env:
+      - name: HELM_CACHE_HOME
+        value: /tmp
+      - name: HELM_CONFIG_HOME
+        value: /tmp
+      - name: HELM_DATA_HOME
+        value: /tmp
+      envFrom:
+      - secretRef:
+          name: argocd-vault-plugin-secret
+      command:
+      - "/bin/bash"
+      - "-c"
+      args:
+      - "
+        cd {{ workflow.parameters.path }}
+        && helm dependency build ../base
+        && kustomize build . --enable-helm --load-restrictor=LoadRestrictionsNone | argocd-vault-plugin generate - | kubectl apply --context {{ workflow.parameters.context }} -n {{ workflow.parameters.namespace }} -f -
+        "
+      workingDir: /src
+      resources:
+        requests:
+          memory: 128Mi
+          cpu: 50m
+      volumeMounts:
+      - name: kube-config
+        mountPath: /root/.kube/config
+        subPath: config
+    nodeSelector:
+      kubernetes.io/arch: amd64
+      team: devops
+      service: devops-infra
+      performance_type: standard
