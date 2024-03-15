@@ -3,10 +3,13 @@ kind: Kustomization
 resources:
 - awx-operator-kustomize.yaml
 - k6-operator-kustomize.yaml
-- tyk-operator-kustomized-helm.yaml
 - cert-manager-kustomized-helm.yaml
 - external-secrets-kustomized-helm.yaml
+- istio-operator-kustomized-helm.yaml
 - jaeger-operator-kustomized-helm.yaml
+- kiali-operator-kustomized-helm.yaml
 - minio-operator-kustomized-helm.yaml
 - opentelemetry-operator-kustomized-helm.yaml
+- kube-prometheus-kustomized-helm.yaml
+- tyk-operator-kustomized-helm.yaml
 - victoria-metrics-operator-kustomized-helm.yaml
