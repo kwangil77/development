@@ -12,12 +12,12 @@ RUN dnf install -y unzip \
     && ansible-galaxy collection install community.docker --collections-path /usr/share/ansible/collections \
     && ansible-galaxy collection install community.aws --collections-path /usr/share/ansible/collections \
     && pip install passlib \
-    && curl -sSL -o /tmp/terraform.zip https://releases.hashicorp.com/terraform/1.9.8/terraform_1.9.8_linux_amd64.zip \
+    && curl -sSL -o /tmp/terraform.zip https://releases.hashicorp.com/terraform/1.10.5/terraform_1.10.5_linux_amd64.zip \
     && unzip /tmp/terraform.zip -d /usr/local/bin \
-    && curl -sSL -o /tmp/helm.tar.gz https://get.helm.sh/helm-v3.16.3-linux-amd64.tar.gz \
+    && curl -sSL -o /tmp/helm.tar.gz https://get.helm.sh/helm-v3.17.0-linux-amd64.tar.gz \
     && tar xzvf /tmp/helm.tar.gz -C /tmp \
     && mv /tmp/linux-amd64/helm /usr/local/bin \
-    && curl -sSL -o /usr/local/bin/aws-iam-authenticator https://github.com/kubernetes-sigs/aws-iam-authenticator/releases/download/v0.6.28/aws-iam-authenticator_0.6.28_linux_amd64 \
+    && curl -sSL -o /usr/local/bin/aws-iam-authenticator https://github.com/kubernetes-sigs/aws-iam-authenticator/releases/download/v0.6.29/aws-iam-authenticator_0.6.29_linux_amd64 \
     && chmod +x /usr/local/bin/aws-iam-authenticator \
     && rm -rf /tmp/*
 USER 1000

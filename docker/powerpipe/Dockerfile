@@ -9,7 +9,7 @@ RUN apt update \
 
 RUN adduser --system --disabled-login --ingroup 0 --gecos "powerpipe user" --shell /bin/false --uid 9033 --home /home/powerpipe powerpipe
 
-RUN curl -sSL -o /tmp/powerpipe.tar.gz https://github.com/turbot/powerpipe/releases/download/v1.0.1/powerpipe.linux.${TARGETARCH}.tar.gz \
+RUN curl -sSL -o /tmp/powerpipe.tar.gz https://github.com/turbot/powerpipe/releases/download/v1.1.0/powerpipe.linux.${TARGETARCH}.tar.gz \
     && tar xvzf /tmp/powerpipe.tar.gz -C /tmp \
     && mv /tmp/powerpipe /usr/local/bin/powerpipe \
     && rm -rf /tmp/powerpipe*
