@@ -40,7 +40,7 @@ data:
           service: devops-infra
           performance_type: standard
       runner:
-        image: docker.io/grafana/k6:0.56.0
+        image: docker.io/grafana/k6:0.58.0
         env:
         - name: K6_PROMETHEUS_RW_SERVER_URL
           value: http://prometheus.observability:9090/api/v1/write
