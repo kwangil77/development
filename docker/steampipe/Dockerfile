@@ -9,7 +9,7 @@ RUN apt update \
 
 RUN adduser --system --disabled-login --ingroup 0 --gecos "steampipe user" --shell /bin/false --uid 9193 --home /home/steampipe steampipe
 
-RUN curl -sSL -o /tmp/steampipe.tar.gz https://github.com/turbot/steampipe/releases/download/v1.0.3/steampipe_linux_${TARGETARCH}.tar.gz \
+RUN curl -sSL -o /tmp/steampipe.tar.gz https://github.com/turbot/steampipe/releases/download/v1.1.0/steampipe_linux_${TARGETARCH}.tar.gz \
     && tar xvzf /tmp/steampipe.tar.gz -C /tmp \
     && mv /tmp/steampipe /usr/local/bin/steampipe \
     && rm -rf /tmp/steampipe*
