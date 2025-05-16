@@ -17,7 +17,7 @@ RUN dnf install -y unzip \
     && curl -sSL -o /tmp/helm.tar.gz https://get.helm.sh/helm-v3.17.3-linux-amd64.tar.gz \
     && tar xzvf /tmp/helm.tar.gz -C /tmp \
     && mv /tmp/linux-amd64/helm /usr/local/bin \
-    && curl -sSL -o /usr/local/bin/aws-iam-authenticator https://github.com/kubernetes-sigs/aws-iam-authenticator/releases/download/v0.7.2/aws-iam-authenticator_0.6.29_linux_amd64 \
+    && curl -sSL -o /usr/local/bin/aws-iam-authenticator https://github.com/kubernetes-sigs/aws-iam-authenticator/releases/download/v0.7.2/aws-iam-authenticator_0.7.2_linux_amd64 \
     && chmod +x /usr/local/bin/aws-iam-authenticator \
     && rm -rf /tmp/*
 USER 1000

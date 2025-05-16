@@ -14,7 +14,7 @@ RUN curl -sSL -o /tmp/steampipe.tar.gz https://github.com/turbot/steampipe/relea
     && mv /tmp/steampipe /usr/local/bin/steampipe \
     && rm -rf /tmp/steampipe*
 
-RUN curl -sSL -o /usr/local/bin/aws-iam-authenticator https://github.com/kubernetes-sigs/aws-iam-authenticator/releases/download/v0.7.2/aws-iam-authenticator_0.6.29_linux_${TARGETARCH} \
+RUN curl -sSL -o /usr/local/bin/aws-iam-authenticator https://github.com/kubernetes-sigs/aws-iam-authenticator/releases/download/v0.7.2/aws-iam-authenticator_0.7.2_linux_${TARGETARCH} \
     && chmod +x /usr/local/bin/aws-iam-authenticator
 
 USER steampipe:0
