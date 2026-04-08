@@ -83,7 +83,7 @@ spec:
       - "-c"
       args:
       - "
-        cd argo-workflows/elasticbeanstalk/simple-server/simple-server-dev
+        cd elasticbeanstalk/simple-server/simple-server-dev
         && zip simple-server-dev.zip -r .
         && aws s3 cp simple-server-dev.zip s3://example-dev-devops-bucket/application/simple-server/{{ workflow.parameters.revision }}/simple-server-dev-{{ inputs.parameters.version }}.zip
         && aws elasticbeanstalk create-application-version

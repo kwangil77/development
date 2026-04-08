@@ -53,7 +53,7 @@ spec:
       - "-c"
       args:
       - "
-        cd argo-workflows/cloudfront/simple-web/simple-web-dev
+        cd cloudfront/simple-web/simple-web-dev
         && aws s3 sync . s3://example-dev-devops-bucket/simple-web.example.io
         && aws s3 cp index.html s3://example-dev-devops-bucket/simple-web.example.io/index.html
           --cache-control no-cache,no-store

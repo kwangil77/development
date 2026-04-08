@@ -65,7 +65,7 @@ spec:
       - "-c"
       args:
       - "
-        cd argo-workflows/codedeploy/simple-api/simple-api-dev
+        cd codedeploy/simple-api/simple-api-dev
         && zip simple-api-dev.zip -r .
         && aws s3 cp simple-api-dev.zip s3://example-dev-devops-bucket/application/simple-api/{{ workflow.parameters.revision }}/simple-api-dev-{{ inputs.parameters.version }}.zip
         && aws deploy register-application-revision

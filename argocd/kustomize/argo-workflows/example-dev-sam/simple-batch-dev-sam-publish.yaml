@@ -62,7 +62,7 @@ spec:
       args:
       - "
         sam package
-          --template-file argo-workflows/lambda/simple-batch/simple-batch-dev/template.yaml
+          --template-file lambda/simple-batch/simple-batch-dev/template.yaml
           --output-template-file /tmp/template.yaml
           --s3-bucket example-dev-devops-bucket
           --s3-prefix application/simple-batch-dev-stack/{{ workflow.parameters.revision }}/{{ workflow.creationTimestamp.Y }}{{ workflow.creationTimestamp.m }}{{ workflow.creationTimestamp.d }}{{ workflow.creationTimestamp.H }}{{ workflow.creationTimestamp.M }}
