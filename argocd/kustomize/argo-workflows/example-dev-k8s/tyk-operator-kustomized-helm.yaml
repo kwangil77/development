@@ -13,7 +13,7 @@ spec:
     - name: revision
       value: main
     - name: path
-      value: argo-workflows/kustomized-helm/tyk-operator/example-dev
+      value: argocd/kustomized-helm/tyk-operator/example-dev
     - name: context
       value: arn:aws:eks:ap-northeast-2:...
     - name: namespace
